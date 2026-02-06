@@ -101,6 +101,9 @@ Arquitetura adotada: **monólito modular** com separação clara de camadas.
 
 ### Frontend (UX/UI)
 - análise única, lote por arquivos e lote por URLs;
+- fluxo guiado em 3 etapas (entrada, configuração e resultado);
+- cenários rápidos para iniciar o tipo de análise com um clique;
+- checklist de execução com pendências contextuais;
 - presets rápidos + presets personalizados persistentes;
 - filtros avançados (confiança, área mínima, include/exclude labels);
 - insights visuais de detecção (KPIs e distribuição por label);
@@ -109,6 +112,15 @@ Arquitetura adotada: **monólito modular** com separação clara de camadas.
 - painel operacional consolidado (métricas, runtime e atividade recente);
 - controles de acessibilidade (alto contraste e modo compacto);
 - atalhos de teclado para produtividade.
+
+## Racional UX/UI
+
+Evoluções aplicadas para reduzir fricção e abandono:
+- **orientação progressiva**: stepper de jornada deixa explícito o próximo passo;
+- **entrada previsível**: separação clara entre lote por arquivos e lote por URLs;
+- **feedback antecipado**: checklist de pré-execução evita erro tardio;
+- **ação rápida**: cenários prontos para os fluxos mais frequentes;
+- **legibilidade operacional**: contexto ativo e painéis com hierarquia de decisão.
 
 ## Segurança, Performance e Confiabilidade
 

@@ -58,8 +58,50 @@
       </div>
     </section>
 
+    <section class="journey card reveal" aria-label="Fluxo guiado da análise">
+      <div class="journey-grid">
+        <article>
+          <p class="eyebrow">Fluxo Guiado</p>
+          <h3 class="journey-title">Seu caminho de execução em 3 passos objetivos.</h3>
+          <ol id="journeySteps" class="journey-steps">
+            <li data-step="input">Entrada da imagem</li>
+            <li data-step="config">Configuração de inferência</li>
+            <li data-step="result">Resultado e decisão</li>
+          </ol>
+          <div id="contextSummary" class="context-summary" aria-live="polite"></div>
+        </article>
+
+        <article>
+          <p class="eyebrow">Cenários Rápidos</p>
+          <h3 class="journey-title">Escolha o fluxo ideal para começar em segundos.</h3>
+          <div class="quick-scenarios">
+            <button type="button" id="quickSingleBtn" class="scenario-card">
+              <strong>Análise unitária</strong>
+              <span>Upload ou URL para verificação rápida.</span>
+            </button>
+            <button type="button" id="quickBatchFilesBtn" class="scenario-card">
+              <strong>Lote por arquivos</strong>
+              <span>Processamento em massa de imagens locais.</span>
+            </button>
+            <button type="button" id="quickBatchUrlsBtn" class="scenario-card">
+              <strong>Lote por URLs</strong>
+              <span>Integração remota sem upload manual.</span>
+            </button>
+          </div>
+        </article>
+      </div>
+    </section>
+
     <section class="workspace">
       <aside class="controls-column" aria-label="Controles de entrada">
+        <article class="card section-card reveal">
+          <div class="header-inline">
+            <h3>Checklist de execução</h3>
+            <span id="preflightBadge" class="status-pill">Validando</span>
+          </div>
+          <ul id="preflightList" class="preflight-list" aria-live="polite"></ul>
+        </article>
+
         <article class="card section-card reveal">
           <h3>Modo de análise</h3>
           <div class="segmented" role="group" aria-label="Modo de análise">

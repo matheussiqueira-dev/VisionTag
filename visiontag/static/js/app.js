@@ -99,6 +99,106 @@ function getCurrentAnalyzeLabel() {
   return state.mode === MODES.single ? "Analisar imagem" : "Analisar lote";
 }
 
+function normalizeCsvLabels(rawValue) {
+  return String(rawValue || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function hasConfigConflict() {
+  const include = new Set(normalizeCsvLabels(state.config.includeLabels));
+  const exclude = new Set(normalizeCsvLabels(state.config.excludeLabels));
+  for (const label of include) {
+    if (exclude.has(label)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasResultPayload() {
+  return state.mode === MODES.single ? Boolean(state.singleResult) : Boolean(state.batchResult);
+}
+
+function inputReadiness() {
+  if (state.mode === MODES.single) {
+    const hasUrl = String(ui.dom.imageUrl.value || "").trim().length > 0;
+    return Boolean(state.selectedFile || hasUrl);
+  }
+
+  if (state.batchSource === "urls") {
+    return state.batchUrls.length > 0;
+  }
+
+  return state.batchFiles.length > 0;
+}
+
+function buildContextItems() {
+  const modeText = state.mode === MODES.single ? "Modo: Único" : "Modo: Lote";
+  const sourceText =
+    state.mode === MODES.single
+      ? "Fonte: Upload/URL"
+      : state.batchSource === "urls"
+        ? "Fonte lote: URLs"
+        : "Fonte lote: Arquivos";
+  const entriesCount =
+    state.mode === MODES.single
+      ? state.selectedFile || String(ui.dom.imageUrl.value || "").trim()
+        ? 1
+        : 0
+      : state.batchSource === "urls"
+        ? state.batchUrls.length
+        : state.batchFiles.length;
+  const entriesText = `${entriesCount} entrada(s)`;
+  const confText = `Conf ${Number(state.config.conf).toFixed(2)}`;
+  const tagsText = `Max tags ${state.config.maxTags}`;
+  const filterText = `Filtro visual ${state.config.visualFilterPercent}%`;
+
+  return [modeText, sourceText, entriesText, confText, tagsText, filterText];
+}
+
+function buildPreflightItems() {
+  const inputReady = inputReadiness();
+  const configConflict = hasConfigConflict();
+  const apiKeyProvided = String(state.config.apiKey || "").trim().length > 0;
+
+  const items = [
+    {
+      ok: inputReady,
+      message: inputReady
+        ? "Entrada válida detectada para o modo atual."
+        : "Adicione uma imagem ou URL antes de executar a análise.",
+    },
+    {
+      ok: !configConflict,
+      message: configConflict
+        ? "Conflito de labels: a mesma label está em incluir e excluir."
+        : "Parâmetros de inferência consistentes.",
+    },
+    {
+      ok: true,
+      message: apiKeyProvided
+        ? "Autenticação ativa por API key."
+        : "API key opcional (somente necessária em ambientes protegidos).",
+    },
+  ];
+
+  return items;
+}
+
+function renderGuidedExperience() {
+  const inputReady = inputReadiness();
+  const configReady = !hasConfigConflict();
+  const resultReady = hasResultPayload();
+  const preflightItems = buildPreflightItems();
+  const preflightReady = preflightItems.every((item) => item.ok);
+
+  ui.renderJourneySteps({ inputReady, configReady, resultReady });
+  ui.renderContextSummary(buildContextItems());
+  ui.renderPreflight(preflightItems, preflightReady);
+}
+
 function parseBatchUrls(rawValue) {
   if (!rawValue) {
     return [];
@@ -116,6 +216,7 @@ function applyModeUI() {
   ui.setBatchInputType(state.batchSource);
   ui.dom.analyzeBtn.dataset.baseLabel = getCurrentAnalyzeLabel();
   ui.dom.analyzeBtn.textContent = ui.dom.analyzeBtn.dataset.baseLabel;
+  renderGuidedExperience();
 }
 
 function syncConfigUI() {
@@ -161,11 +262,13 @@ function updateInputPreviewAndQueue() {
     state.batchUrls = parseBatchUrls(ui.dom.batchUrlsInput.value || "");
     setPreviewFromFile(null);
     ui.renderUrlQueue(state.batchUrls);
+    renderGuidedExperience();
     return;
   }
 
   setPreviewFromFile(state.batchFiles[0] || null);
   ui.renderFileQueue(state.batchFiles);
+  renderGuidedExperience();
 }
 
 function getActiveTags() {
@@ -234,6 +337,7 @@ function renderResultSurface() {
     ui.renderInsights(detectionInsights(detections));
     ui.setMetrics(computeSingleMetrics(state.singleResult));
     ui.renderBatchResults(state.batchResult);
+    renderGuidedExperience();
     return;
   }
 
@@ -245,6 +349,7 @@ function renderResultSurface() {
     ui.renderInsights(detectionInsights(detections));
     ui.setMetrics(computeBatchMetrics(state.batchResult));
     ui.renderBatchResults(state.batchResult);
+    renderGuidedExperience();
     return;
   }
 
@@ -254,6 +359,7 @@ function renderResultSurface() {
   ui.renderInsights(null);
   ui.setMetrics({ files: 0, detections: 0, inference: 0, uniqueTags: 0 });
   ui.renderBatchResults(state.batchResult);
+  renderGuidedExperience();
 }
 
 function refreshActionAvailability() {
@@ -803,6 +909,23 @@ function bindEvents() {
   ui.dom.modeBatchBtn.addEventListener("click", () => switchMode(MODES.batch));
   ui.dom.batchSourceFilesBtn.addEventListener("click", () => switchBatchSource("files"));
   ui.dom.batchSourceUrlsBtn.addEventListener("click", () => switchBatchSource("urls"));
+  ui.dom.quickSingleBtn.addEventListener("click", () => {
+    switchMode(MODES.single);
+    ui.dom.fileInput.focus();
+    setStatus("Cenário rápido aplicado: análise unitária.", STATUS_VARIANT.neutral);
+  });
+  ui.dom.quickBatchFilesBtn.addEventListener("click", () => {
+    switchMode(MODES.batch);
+    switchBatchSource("files");
+    ui.dom.fileInput.focus();
+    setStatus("Cenário rápido aplicado: lote por arquivos.", STATUS_VARIANT.neutral);
+  });
+  ui.dom.quickBatchUrlsBtn.addEventListener("click", () => {
+    switchMode(MODES.batch);
+    switchBatchSource("urls");
+    ui.dom.batchUrlsInput.focus();
+    setStatus("Cenário rápido aplicado: lote por URLs.", STATUS_VARIANT.neutral);
+  });
 
   ui.dom.presetButtons.forEach((button) => {
     button.addEventListener("click", () => {

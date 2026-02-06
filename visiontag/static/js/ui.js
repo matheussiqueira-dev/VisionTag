@@ -5,6 +5,13 @@ const dom = {
   modeSingleBtn: document.getElementById("modeSingleBtn"),
   modeBatchBtn: document.getElementById("modeBatchBtn"),
   modeHint: document.getElementById("modeHint"),
+  journeySteps: document.getElementById("journeySteps"),
+  contextSummary: document.getElementById("contextSummary"),
+  preflightBadge: document.getElementById("preflightBadge"),
+  preflightList: document.getElementById("preflightList"),
+  quickSingleBtn: document.getElementById("quickSingleBtn"),
+  quickBatchFilesBtn: document.getElementById("quickBatchFilesBtn"),
+  quickBatchUrlsBtn: document.getElementById("quickBatchUrlsBtn"),
   batchSourceFilesBtn: document.getElementById("batchSourceFilesBtn"),
   batchSourceUrlsBtn: document.getElementById("batchSourceUrlsBtn"),
   batchSourceHint: document.getElementById("batchSourceHint"),
@@ -72,7 +79,7 @@ function setText(element, value) {
 }
 
 function setStatusVariant(variant) {
-  dom.statusPill.classList.remove("is-loading", "is-success", "is-error");
+  dom.statusPill.classList.remove("is-loading", "is-success", "is-error", "is-warning");
 
   if (variant === STATUS_VARIANT.loading) {
     dom.statusPill.classList.add("is-loading");
@@ -89,6 +96,12 @@ function setStatusVariant(variant) {
   if (variant === STATUS_VARIANT.error) {
     dom.statusPill.classList.add("is-error");
     setText(dom.statusPill, "Erro");
+    return;
+  }
+
+  if (variant === "warning") {
+    dom.statusPill.classList.add("is-warning");
+    setText(dom.statusPill, "Atenção");
     return;
   }
 
@@ -413,7 +426,7 @@ function makeHistoryItem(entry) {
   item.className = "history-item";
 
   const title = document.createElement("strong");
-  title.textContent = entry.mode === MODES.batch ? `Lote (${entry.fileCount} arquivos)` : entry.fileName;
+  title.textContent = entry.mode === MODES.batch ? entry.fileName || `Lote (${entry.fileCount} arquivos)` : entry.fileName;
   item.appendChild(title);
 
   const meta = document.createElement("p");
@@ -501,6 +514,114 @@ function renderCustomPresets(presets) {
   });
 
   dom.customPresetList.appendChild(fragment);
+}
+
+function renderJourneySteps(state) {
+  if (!dom.journeySteps) {
+    return;
+  }
+
+  const mapping = {
+    input: Boolean(state?.inputReady),
+    config: Boolean(state?.configReady),
+    result: Boolean(state?.resultReady),
+  };
+
+  const children = Array.from(dom.journeySteps.querySelectorAll("li[data-step]"));
+  children.forEach((item) => {
+    const key = item.dataset.step;
+    item.classList.remove("is-active", "is-done");
+    if (!key || !Object.hasOwn(mapping, key)) {
+      return;
+    }
+
+    if (key === "result" && mapping[key]) {
+      item.classList.add("is-done");
+      return;
+    }
+
+    if (mapping[key]) {
+      item.classList.add("is-done");
+      return;
+    }
+
+    if (key === "input") {
+      item.classList.add("is-active");
+      return;
+    }
+
+    if (key === "config" && mapping.input) {
+      item.classList.add("is-active");
+      return;
+    }
+
+    if (key === "result" && mapping.input && mapping.config) {
+      item.classList.add("is-active");
+    }
+  });
+}
+
+function renderContextSummary(items) {
+  if (!dom.contextSummary) {
+    return;
+  }
+
+  clearElement(dom.contextSummary);
+  const safeItems = safeArray(items);
+  if (!safeItems.length) {
+    const chip = document.createElement("span");
+    chip.className = "context-chip";
+    chip.textContent = "Sem contexto ativo";
+    dom.contextSummary.appendChild(chip);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  safeItems.forEach((item) => {
+    const chip = document.createElement("span");
+    chip.className = "context-chip";
+    chip.textContent = String(item);
+    fragment.appendChild(chip);
+  });
+  dom.contextSummary.appendChild(fragment);
+}
+
+function renderPreflight(items, isReady) {
+  if (!dom.preflightList || !dom.preflightBadge) {
+    return;
+  }
+
+  clearElement(dom.preflightList);
+  dom.preflightBadge.classList.remove("is-success", "is-warning", "is-error");
+  dom.preflightBadge.classList.add(isReady ? "is-success" : "is-warning");
+  dom.preflightBadge.textContent = isReady ? "Pronto" : "Pendências";
+
+  const safeItems = safeArray(items);
+  if (!safeItems.length) {
+    const li = document.createElement("li");
+    li.className = "preflight-item";
+    li.textContent = "Nenhum item para validar.";
+    dom.preflightList.appendChild(li);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  safeItems.forEach((item) => {
+    const li = document.createElement("li");
+    li.className = `preflight-item ${item.ok ? "is-ok" : "is-warning"}`;
+
+    const title = document.createElement("strong");
+    title.textContent = item.ok ? "OK" : "Revisar";
+
+    const description = document.createElement("span");
+    description.textContent = String(item.message || "");
+
+    li.appendChild(title);
+    li.appendChild(description);
+    fragment.appendChild(li);
+  });
+
+  dom.preflightList.appendChild(fragment);
 }
 
 function setMode(mode) {
@@ -783,6 +904,9 @@ export const ui = {
   renderBatchResults,
   renderHistory,
   renderCustomPresets,
+  renderJourneySteps,
+  renderContextSummary,
+  renderPreflight,
   renderInsights,
   focusHistorySearch,
   openShortcuts,
