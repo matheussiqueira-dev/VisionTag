@@ -1,7 +1,14 @@
 import cv2
 import numpy as np
 
-from visiontag.utils import decode_image, is_allowed_content_type, resize_preserving_aspect, tag_frequency
+from visiontag.utils import (
+    decode_image,
+    is_allowed_content_type,
+    normalize_labels,
+    resize_preserving_aspect,
+    sanitize_filename,
+    tag_frequency,
+)
 
 
 def test_is_allowed_content_type():
@@ -33,3 +40,9 @@ def test_decode_image_from_bytes_round_trip():
     decoded = decode_image(encoded.tobytes())
     assert decoded is not None
     assert decoded.shape[:2] == (50, 50)
+
+
+def test_sanitize_filename_and_label_normalization():
+    assert sanitize_filename("..\\folder\\arquivo.png") == "arquivo.png"
+    assert sanitize_filename(" ") == "arquivo"
+    assert normalize_labels([" Mesa ", "Cadeira", "mesa"]) == ("cadeira", "mesa")

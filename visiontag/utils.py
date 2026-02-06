@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 from typing import Dict, Iterable, Tuple
 
 import cv2
@@ -46,3 +47,17 @@ def resize_preserving_aspect(image, max_dimension: int) -> Tuple[object, float]:
 def tag_frequency(tags: Iterable[str]) -> Dict[str, int]:
     counts = Counter(tags)
     return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+
+
+def sanitize_filename(value: str | None) -> str:
+    candidate = Path(value or "arquivo").name.strip()
+    if not candidate:
+        return "arquivo"
+    return candidate[:160]
+
+
+def normalize_labels(labels: Iterable[str] | None) -> tuple[str, ...]:
+    if not labels:
+        return ()
+    cleaned = [label.strip().lower() for label in labels if label and label.strip()]
+    return tuple(sorted(set(cleaned)))

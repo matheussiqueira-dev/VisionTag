@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from threading import Lock
 from time import perf_counter
-from typing import Dict, List, Tuple
+from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
 from ultralytics import YOLO
 
 from .labels_pt import COCO_PT
-from .utils import resize_preserving_aspect
+from .utils import normalize_labels, resize_preserving_aspect
 
 _MODEL_CACHE: Dict[str, YOLO] = {}
 _MODEL_CACHE_LOCK = Lock()
@@ -21,13 +21,23 @@ class DetectionOptions:
     max_tags: int = 5
     min_area_ratio: float = 0.01
     include_person: bool = False
+    include_labels: tuple[str, ...] = ()
+    exclude_labels: tuple[str, ...] = ()
 
     def normalized(self) -> "DetectionOptions":
+        include_labels = normalize_labels(self.include_labels)
+        exclude_labels = normalize_labels(self.exclude_labels)
+
+        # Exclusion has priority over inclusion to avoid contradictory filters.
+        include_labels = tuple(label for label in include_labels if label not in exclude_labels)
+
         return DetectionOptions(
-            conf=min(max(self.conf, 0.01), 1.0),
+            conf=min(max(float(self.conf), 0.01), 1.0),
             max_tags=max(1, int(self.max_tags)),
-            min_area_ratio=min(max(self.min_area_ratio, 0.0), 1.0),
+            min_area_ratio=min(max(float(self.min_area_ratio), 0.0), 1.0),
             include_person=bool(self.include_person),
+            include_labels=include_labels,
+            exclude_labels=exclude_labels,
         )
 
 
@@ -66,6 +76,18 @@ class VisionTagger:
     @property
     def model_loaded(self) -> bool:
         return self._model is not None
+
+    @staticmethod
+    def _matches_label_filters(label: str, options: DetectionOptions) -> bool:
+        normalized = label.strip().lower()
+
+        if options.exclude_labels and normalized in options.exclude_labels:
+            return False
+
+        if options.include_labels and normalized not in options.include_labels:
+            return False
+
+        return True
 
     def _predict(self, image: np.ndarray, options: DetectionOptions) -> Tuple[List[Detection], float]:
         if image is None or image.size == 0:
@@ -122,8 +144,10 @@ class VisionTagger:
                 continue
 
             label_pt = COCO_PT.get(label_en, label_en)
-            detection = Detection(label=label_pt, confidence=float(confidence), bbox=(x1, y1, x2, y2))
+            if not self._matches_label_filters(label_pt, options):
+                continue
 
+            detection = Detection(label=label_pt, confidence=float(confidence), bbox=(x1, y1, x2, y2))
             existing = best_by_label.get(label_pt)
             if existing is None or detection.confidence > existing.confidence:
                 best_by_label[label_pt] = detection
