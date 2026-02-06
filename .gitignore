@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+
+*.pyc
+*.pyo
+*.pt
+*.onnx
+*.engine
+*.log
+
+build/
+dist/

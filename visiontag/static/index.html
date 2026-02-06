@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VisionTag | Analisador Inteligente de Imagens</title>
+  <meta name="description" content="Detecte objetos e gere tags em portugues com uma interface profissional e rapida." />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="background-glow glow-1" aria-hidden="true"></div>
+  <div class="background-glow glow-2" aria-hidden="true"></div>
+  <div class="background-grid" aria-hidden="true"></div>
+
+  <main class="app-shell">
+    <header class="hero card reveal">
+      <p class="eyebrow">VisionTag Platform</p>
+      <h1>Deteccao visual com tags acionaveis para operacao real</h1>
+      <p class="hero-copy">
+        Faça upload da imagem, ajuste os parâmetros de inferência e obtenha tags em português com detecções detalhadas e métricas.
+      </p>
+      <div class="hero-badges">
+        <span>API versionada</span>
+        <span>Segurança de upload</span>
+        <span>Modo batch</span>
+      </div>
+    </header>
+
+    <section class="workspace reveal" aria-label="Ferramentas do VisionTag">
+      <div class="panel card upload-panel">
+        <h2>Entrada</h2>
+        <p class="panel-subtitle">Envie uma imagem para análise.</p>
+
+        <label class="dropzone" id="dropzone" for="imageInput" tabindex="0" aria-label="Area de upload de imagem">
+          <input id="imageInput" name="image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" />
+          <strong>Arraste e solte a imagem aqui</strong>
+          <span>ou clique para selecionar um arquivo.</span>
+        </label>
+
+        <div class="preview" id="preview" aria-live="polite">
+          <p>Nenhuma imagem selecionada.</p>
+        </div>
+
+        <div class="controls" aria-label="Parametros de inferencia">
+          <h3>Configuração</h3>
+
+          <label for="confRange">Confiança mínima <output id="confValue">0.70</output></label>
+          <input id="confRange" type="range" min="0.10" max="0.95" step="0.01" value="0.70" />
+
+          <label for="maxTags">Máximo de tags</label>
+          <input id="maxTags" type="number" min="1" max="25" step="1" value="5" />
+
+          <label for="minArea">Área mínima da detecção (%)</label>
+          <input id="minArea" type="number" min="0" max="50" step="0.1" value="1.0" />
+
+          <label class="check">
+            <input id="includePerson" type="checkbox" />
+            <span>Incluir pessoa nas tags</span>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button type="button" id="analyzeBtn" class="btn btn-primary">Analisar imagem</button>
+          <button type="button" id="clearBtn" class="btn btn-ghost">Limpar</button>
+        </div>
+      </div>
+
+      <div class="panel stack">
+        <article class="card result-panel">
+          <div class="section-head">
+            <h2>Resultado</h2>
+            <button type="button" id="copyTagsBtn" class="btn btn-secondary" disabled>Copiar tags</button>
+          </div>
+          <p class="panel-subtitle" id="statusMessage" aria-live="polite">Pronto para análise.</p>
+
+          <section>
+            <h3>Tags</h3>
+            <div id="tagsWrap" class="tags-empty">As tags aparecerão aqui após a análise.</div>
+          </section>
+
+          <section>
+            <h3>Detecções</h3>
+            <div class="table-wrap">
+              <table>
+                <caption class="visually-hidden">Tabela de detecções identificadas</caption>
+                <thead>
+                  <tr>
+                    <th>Objeto</th>
+                    <th>Confiança</th>
+                    <th>Bounding Box</th>
+                  </tr>
+                </thead>
+                <tbody id="detectionsBody">
+                  <tr>
+                    <td colspan="3" class="muted">Sem dados.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="metrics" id="metricsWrap">
+            <div>
+              <span>Total de detecções</span>
+              <strong id="metricDetections">0</strong>
+            </div>
+            <div>
+              <span>Tempo de inferência</span>
+              <strong id="metricInference">0 ms</strong>
+            </div>
+            <div>
+              <span>Tags únicas</span>
+              <strong id="metricUnique">0</strong>
+            </div>
+          </section>
+        </article>
+
+        <article class="card history-panel">
+          <div class="section-head">
+            <h2>Histórico local</h2>
+            <button type="button" id="clearHistoryBtn" class="btn btn-ghost">Limpar histórico</button>
+          </div>
+          <p class="panel-subtitle">Últimas análises salvas no navegador.</p>
+          <ul id="historyList" class="history-list" aria-live="polite"></ul>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
