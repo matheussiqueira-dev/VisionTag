@@ -1,0 +1,356 @@
+import { MODES, STATUS_VARIANT } from "./constants.js";
+import { bytesToReadable, safeArray, toPercent } from "./helpers.js";
+
+const dom = {
+  modeSingleBtn: document.getElementById("modeSingleBtn"),
+  modeBatchBtn: document.getElementById("modeBatchBtn"),
+  modeHint: document.getElementById("modeHint"),
+  dropzone: document.getElementById("dropzone"),
+  fileInput: document.getElementById("fileInput"),
+  dropzoneTitle: document.getElementById("dropzoneTitle"),
+  fileHint: document.getElementById("fileHint"),
+  previewPane: document.getElementById("previewPane"),
+  fileQueue: document.getElementById("fileQueue"),
+
+  confRange: document.getElementById("confRange"),
+  confValue: document.getElementById("confValue"),
+  maxTags: document.getElementById("maxTags"),
+  minArea: document.getElementById("minArea"),
+  includePerson: document.getElementById("includePerson"),
+  filterRange: document.getElementById("filterRange"),
+  filterValue: document.getElementById("filterValue"),
+
+  analyzeBtn: document.getElementById("analyzeBtn"),
+  downloadBtn: document.getElementById("downloadBtn"),
+  copyTagsBtn: document.getElementById("copyTagsBtn"),
+  clearBtn: document.getElementById("clearBtn"),
+
+  statusPill: document.getElementById("statusPill"),
+  statusMessage: document.getElementById("statusMessage"),
+  metricFiles: document.getElementById("metricFiles"),
+  metricDetections: document.getElementById("metricDetections"),
+  metricInference: document.getElementById("metricInference"),
+  metricUnique: document.getElementById("metricUnique"),
+
+  tagsWrap: document.getElementById("tagsWrap"),
+  detectionsBody: document.getElementById("detectionsBody"),
+  batchResults: document.getElementById("batchResults"),
+
+  historySearch: document.getElementById("historySearch"),
+  historyList: document.getElementById("historyList"),
+  clearHistoryBtn: document.getElementById("clearHistoryBtn"),
+};
+
+function setText(element, value) {
+  element.textContent = value;
+}
+
+function setStatusVariant(variant) {
+  dom.statusPill.classList.remove("is-loading", "is-success", "is-error");
+
+  if (variant === STATUS_VARIANT.loading) {
+    dom.statusPill.classList.add("is-loading");
+    setText(dom.statusPill, "Processando");
+    return;
+  }
+
+  if (variant === STATUS_VARIANT.success) {
+    dom.statusPill.classList.add("is-success");
+    setText(dom.statusPill, "Concluído");
+    return;
+  }
+
+  if (variant === STATUS_VARIANT.error) {
+    dom.statusPill.classList.add("is-error");
+    setText(dom.statusPill, "Erro");
+    return;
+  }
+
+  setText(dom.statusPill, "Pronto");
+}
+
+function createTagChip(label) {
+  const chip = document.createElement("span");
+  chip.className = "tag-chip";
+  chip.textContent = label;
+  return chip;
+}
+
+function clearElement(element) {
+  while (element.firstChild) {
+    element.removeChild(element.firstChild);
+  }
+}
+
+function renderSinglePreview(previewUrl) {
+  clearElement(dom.previewPane);
+  if (!previewUrl) {
+    const placeholder = document.createElement("p");
+    placeholder.textContent = "Sem imagem selecionada.";
+    dom.previewPane.appendChild(placeholder);
+    return;
+  }
+
+  const image = document.createElement("img");
+  image.src = previewUrl;
+  image.alt = "Pré-visualização da imagem selecionada";
+  image.loading = "lazy";
+  dom.previewPane.appendChild(image);
+}
+
+function renderFileQueue(files) {
+  clearElement(dom.fileQueue);
+  if (!files.length) {
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  files.forEach((file, index) => {
+    const li = document.createElement("li");
+    li.className = "file-item";
+
+    const fileName = document.createElement("strong");
+    fileName.textContent = `${index + 1}. ${file.name}`;
+
+    const fileSize = document.createElement("span");
+    fileSize.textContent = bytesToReadable(file.size);
+
+    li.appendChild(fileName);
+    li.appendChild(fileSize);
+    fragment.appendChild(li);
+  });
+
+  dom.fileQueue.appendChild(fragment);
+}
+
+function renderTags(tags) {
+  clearElement(dom.tagsWrap);
+
+  if (!tags.length) {
+    dom.tagsWrap.className = "tags-empty";
+    setText(dom.tagsWrap, "Sem tags para exibir.");
+    return;
+  }
+
+  dom.tagsWrap.className = "tags-wrap";
+  const fragment = document.createDocumentFragment();
+  tags.forEach((tag) => fragment.appendChild(createTagChip(tag)));
+  dom.tagsWrap.appendChild(fragment);
+}
+
+function renderDetections(detections, minConfidencePercent) {
+  clearElement(dom.detectionsBody);
+
+  const filtered = safeArray(detections).filter(
+    (item) => item && Number(item.confidence) * 100 >= minConfidencePercent
+  );
+
+  if (!filtered.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 3;
+    cell.className = "td-empty";
+    cell.textContent = "Nenhuma detecção para os critérios atuais.";
+    row.appendChild(cell);
+    dom.detectionsBody.appendChild(row);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  filtered.forEach((item) => {
+    const row = document.createElement("tr");
+
+    const labelCell = document.createElement("td");
+    labelCell.textContent = item.label;
+
+    const confidenceCell = document.createElement("td");
+    confidenceCell.textContent = toPercent(item.confidence);
+
+    const bboxCell = document.createElement("td");
+    const bbox = item.bbox || {};
+    bboxCell.textContent = `${bbox.x1}, ${bbox.y1}, ${bbox.x2}, ${bbox.y2}`;
+
+    row.appendChild(labelCell);
+    row.appendChild(confidenceCell);
+    row.appendChild(bboxCell);
+    fragment.appendChild(row);
+  });
+
+  dom.detectionsBody.appendChild(fragment);
+}
+
+function makeBatchCard(item) {
+  const card = document.createElement("article");
+  card.className = "batch-card";
+
+  const title = document.createElement("h5");
+  title.textContent = item.filename || "arquivo";
+  card.appendChild(title);
+
+  if (item.error) {
+    card.classList.add("is-error");
+    const errorText = document.createElement("p");
+    errorText.textContent = item.error;
+    card.appendChild(errorText);
+    return card;
+  }
+
+  const summaryText = document.createElement("p");
+  const detections = item.result?.total_detections ?? 0;
+  const inference = item.result?.inference_ms ?? 0;
+  summaryText.textContent = `${detections} detecções • ${inference} ms`;
+  card.appendChild(summaryText);
+
+  const tagsWrap = document.createElement("div");
+  tagsWrap.className = "batch-tags";
+  safeArray(item.result?.tags).forEach((tag) => {
+    const chip = document.createElement("span");
+    chip.textContent = tag;
+    tagsWrap.appendChild(chip);
+  });
+
+  if (!tagsWrap.childElementCount) {
+    const noTags = document.createElement("p");
+    noTags.textContent = "Sem tags.";
+    card.appendChild(noTags);
+  } else {
+    card.appendChild(tagsWrap);
+  }
+
+  return card;
+}
+
+function renderBatchResults(batchPayload) {
+  clearElement(dom.batchResults);
+
+  if (!batchPayload || !Array.isArray(batchPayload.items) || !batchPayload.items.length) {
+    dom.batchResults.className = "batch-empty";
+    dom.batchResults.textContent = "Sem análises em lote até o momento.";
+    return;
+  }
+
+  dom.batchResults.className = "batch-grid";
+  const fragment = document.createDocumentFragment();
+  batchPayload.items.forEach((item) => fragment.appendChild(makeBatchCard(item)));
+  dom.batchResults.appendChild(fragment);
+}
+
+function makeHistoryItem(entry) {
+  const item = document.createElement("li");
+  item.className = "history-item";
+
+  const title = document.createElement("strong");
+  title.textContent = entry.mode === MODES.batch ? `Lote (${entry.fileCount} arquivos)` : entry.fileName;
+  item.appendChild(title);
+
+  const meta = document.createElement("p");
+  meta.className = "history-meta";
+  meta.textContent = `${entry.at} • ${entry.totalDetections} detecções • ${entry.inferenceMs} ms`;
+  item.appendChild(meta);
+
+  const tagsWrap = document.createElement("div");
+  tagsWrap.className = "history-tags";
+  safeArray(entry.tags).slice(0, 8).forEach((tag) => {
+    const chip = document.createElement("span");
+    chip.textContent = tag;
+    tagsWrap.appendChild(chip);
+  });
+
+  if (!tagsWrap.childElementCount) {
+    const empty = document.createElement("p");
+    empty.className = "history-meta";
+    empty.textContent = "Sem tags";
+    item.appendChild(empty);
+  } else {
+    item.appendChild(tagsWrap);
+  }
+
+  return item;
+}
+
+function renderHistory(entries) {
+  clearElement(dom.historyList);
+
+  if (!entries.length) {
+    const li = document.createElement("li");
+    li.className = "history-item";
+    li.textContent = "Nenhum histórico registrado.";
+    dom.historyList.appendChild(li);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  entries.forEach((entry) => fragment.appendChild(makeHistoryItem(entry)));
+  dom.historyList.appendChild(fragment);
+}
+
+function setMode(mode) {
+  const isSingle = mode === MODES.single;
+
+  dom.modeSingleBtn.classList.toggle("is-active", isSingle);
+  dom.modeBatchBtn.classList.toggle("is-active", !isSingle);
+  dom.modeSingleBtn.setAttribute("aria-pressed", String(isSingle));
+  dom.modeBatchBtn.setAttribute("aria-pressed", String(!isSingle));
+
+  dom.fileInput.multiple = !isSingle;
+  dom.dropzoneTitle.textContent = isSingle ? "Arraste e solte uma imagem" : "Arraste e solte múltiplas imagens";
+  dom.fileHint.textContent = isSingle
+    ? "ou clique para selecionar um arquivo."
+    : "ou clique para selecionar vários arquivos.";
+  dom.modeHint.textContent = isSingle ? "Modo atual: imagem única." : "Modo atual: lote de imagens.";
+}
+
+function setFormValues(config) {
+  dom.confRange.value = String(config.conf);
+  dom.confValue.textContent = Number(config.conf).toFixed(2);
+
+  dom.maxTags.value = String(config.maxTags);
+  dom.minArea.value = String(config.minAreaPercent);
+  dom.includePerson.checked = Boolean(config.includePerson);
+
+  dom.filterRange.value = String(config.visualFilterPercent);
+  dom.filterValue.textContent = `${config.visualFilterPercent}%`;
+}
+
+function setMetrics(metrics) {
+  setText(dom.metricFiles, String(metrics.files || 0));
+  setText(dom.metricDetections, String(metrics.detections || 0));
+  setText(dom.metricInference, `${metrics.inference || 0} ms`);
+  setText(dom.metricUnique, String(metrics.uniqueTags || 0));
+}
+
+function setStatus(message, variant = STATUS_VARIANT.neutral) {
+  setText(dom.statusMessage, message);
+  setStatusVariant(variant);
+}
+
+function setLoading(isLoading) {
+  dom.analyzeBtn.disabled = isLoading;
+  const baseLabel = dom.analyzeBtn.dataset.baseLabel || "Analisar";
+  if (isLoading) {
+    dom.analyzeBtn.textContent = "Processando...";
+    return;
+  }
+  dom.analyzeBtn.textContent = baseLabel;
+}
+
+function setActionAvailability({ canExport, canCopy }) {
+  dom.downloadBtn.disabled = !canExport;
+  dom.copyTagsBtn.disabled = !canCopy;
+}
+
+export const ui = {
+  dom,
+  setMode,
+  setFormValues,
+  setStatus,
+  setLoading,
+  setActionAvailability,
+  setMetrics,
+  renderSinglePreview,
+  renderFileQueue,
+  renderTags,
+  renderDetections,
+  renderBatchResults,
+  renderHistory,
+};

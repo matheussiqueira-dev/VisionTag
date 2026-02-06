@@ -3,128 +3,197 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VisionTag | Analisador Inteligente de Imagens</title>
-  <meta name="description" content="Detecte objetos e gere tags em portugues com uma interface profissional e rapida." />
+  <title>VisionTag Frontend | Detecção de Objetos com UX Profissional</title>
+  <meta name="description" content="Frontend profissional do VisionTag para análise visual de imagens com resultados detalhados, histórico e processamento em lote." />
+  <meta name="theme-color" content="#16213a" />
+  <meta property="og:title" content="VisionTag Frontend" />
+  <meta property="og:description" content="Interface moderna para detecção de objetos com tags em português." />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
-  <script src="/static/app.js" defer></script>
+  <script type="module" src="/static/js/app.js"></script>
 </head>
 <body>
-  <div class="background-glow glow-1" aria-hidden="true"></div>
-  <div class="background-glow glow-2" aria-hidden="true"></div>
-  <div class="background-grid" aria-hidden="true"></div>
+  <a class="skip-link" href="#main-content">Pular para conteúdo principal</a>
 
-  <main class="app-shell">
-    <header class="hero card reveal">
-      <p class="eyebrow">VisionTag Platform</p>
-      <h1>Deteccao visual com tags acionaveis para operacao real</h1>
-      <p class="hero-copy">
-        Faça upload da imagem, ajuste os parâmetros de inferência e obtenha tags em português com detecções detalhadas e métricas.
-      </p>
-      <div class="hero-badges">
-        <span>API versionada</span>
-        <span>Segurança de upload</span>
-        <span>Modo batch</span>
+  <div class="bg-layer bg-layer-1" aria-hidden="true"></div>
+  <div class="bg-layer bg-layer-2" aria-hidden="true"></div>
+  <div class="bg-grid" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand-wrap">
+      <div class="brand-dot" aria-hidden="true"></div>
+      <div>
+        <p class="brand-kicker">VisionTag Experience</p>
+        <h1>Frontend de Detecção Visual</h1>
       </div>
-    </header>
+    </div>
 
-    <section class="workspace reveal" aria-label="Ferramentas do VisionTag">
-      <div class="panel card upload-panel">
-        <h2>Entrada</h2>
-        <p class="panel-subtitle">Envie uma imagem para análise.</p>
+    <nav class="top-actions" aria-label="Atalhos">
+      <a href="/docs" target="_blank" rel="noopener noreferrer">Documentação da API</a>
+      <a href="/api/v1/health" target="_blank" rel="noopener noreferrer">Health Check</a>
+    </nav>
+  </header>
 
-        <label class="dropzone" id="dropzone" for="imageInput" tabindex="0" aria-label="Area de upload de imagem">
-          <input id="imageInput" name="image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" />
-          <strong>Arraste e solte a imagem aqui</strong>
-          <span>ou clique para selecionar um arquivo.</span>
-        </label>
+  <main id="main-content" class="app-main">
+    <section class="hero card reveal" aria-label="Resumo do produto">
+      <div>
+        <p class="eyebrow">Plataforma Frontend Enterprise</p>
+        <h2>Fluxo completo de análise visual com foco em clareza, velocidade e previsibilidade.</h2>
+        <p>
+          Faça upload único ou em lote, ajuste parâmetros de inferência e receba resultados operacionais com histórico persistente,
+          filtros de confiança e exportação de relatório.
+        </p>
+      </div>
+      <div class="hero-highlights" aria-label="Destaques da interface">
+        <span>Upload único + lote</span>
+        <span>Resultados detalhados</span>
+        <span>Histórico e busca local</span>
+        <span>Exportação JSON</span>
+      </div>
+    </section>
 
-        <div class="preview" id="preview" aria-live="polite">
-          <p>Nenhuma imagem selecionada.</p>
-        </div>
+    <section class="workspace">
+      <aside class="controls-column" aria-label="Controles de entrada">
+        <article class="card section-card reveal">
+          <h3>Modo de análise</h3>
+          <div class="segmented" role="group" aria-label="Modo de análise">
+            <button type="button" id="modeSingleBtn" class="segment is-active" aria-pressed="true">Imagem única</button>
+            <button type="button" id="modeBatchBtn" class="segment" aria-pressed="false">Lote</button>
+          </div>
+          <p class="help-text" id="modeHint">Modo atual: imagem única.</p>
+        </article>
 
-        <div class="controls" aria-label="Parametros de inferencia">
-          <h3>Configuração</h3>
+        <article class="card section-card reveal">
+          <h3>Entrada de arquivos</h3>
+          <label class="dropzone" id="dropzone" for="fileInput" tabindex="0" aria-label="Área de upload">
+            <input
+              id="fileInput"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/bmp"
+            />
+            <strong id="dropzoneTitle">Arraste e solte uma imagem</strong>
+            <span id="fileHint">ou clique para selecionar um arquivo.</span>
+          </label>
 
-          <label for="confRange">Confiança mínima <output id="confValue">0.70</output></label>
+          <div class="preview-pane" id="previewPane" aria-live="polite">
+            <p>Sem imagem selecionada.</p>
+          </div>
+
+          <ul id="fileQueue" class="file-queue" aria-label="Arquivos selecionados"></ul>
+        </article>
+
+        <article class="card section-card reveal">
+          <h3>Parâmetros de inferência</h3>
+
+          <label class="field-label" for="confRange">
+            Confiança mínima
+            <output id="confValue" class="mono">0.70</output>
+          </label>
           <input id="confRange" type="range" min="0.10" max="0.95" step="0.01" value="0.70" />
 
-          <label for="maxTags">Máximo de tags</label>
+          <label class="field-label" for="maxTags">Máximo de tags</label>
           <input id="maxTags" type="number" min="1" max="25" step="1" value="5" />
 
-          <label for="minArea">Área mínima da detecção (%)</label>
+          <label class="field-label" for="minArea">Área mínima da detecção (%)</label>
           <input id="minArea" type="number" min="0" max="50" step="0.1" value="1.0" />
 
-          <label class="check">
+          <label class="field-check" for="includePerson">
             <input id="includePerson" type="checkbox" />
             <span>Incluir pessoa nas tags</span>
           </label>
-        </div>
 
-        <div class="actions">
-          <button type="button" id="analyzeBtn" class="btn btn-primary">Analisar imagem</button>
+          <label class="field-label" for="filterRange">
+            Filtro visual de confiança (%)
+            <output id="filterValue" class="mono">0%</output>
+          </label>
+          <input id="filterRange" type="range" min="0" max="95" step="1" value="0" />
+        </article>
+
+        <div class="action-row reveal">
+          <button type="button" id="analyzeBtn" class="btn btn-primary">Analisar</button>
+          <button type="button" id="downloadBtn" class="btn btn-secondary" disabled>Exportar JSON</button>
+          <button type="button" id="copyTagsBtn" class="btn btn-ghost" disabled>Copiar tags</button>
           <button type="button" id="clearBtn" class="btn btn-ghost">Limpar</button>
         </div>
-      </div>
+      </aside>
 
-      <div class="panel stack">
-        <article class="card result-panel">
-          <div class="section-head">
-            <h2>Resultado</h2>
-            <button type="button" id="copyTagsBtn" class="btn btn-secondary" disabled>Copiar tags</button>
+      <section class="results-column" aria-label="Resultados da análise">
+        <article class="card section-card reveal">
+          <div class="header-inline">
+            <h3>Resultado atual</h3>
+            <span id="statusPill" class="status-pill">Pronto</span>
           </div>
-          <p class="panel-subtitle" id="statusMessage" aria-live="polite">Pronto para análise.</p>
+          <p id="statusMessage" class="help-text" aria-live="polite">Selecione uma imagem para iniciar a análise.</p>
 
-          <section>
-            <h3>Tags</h3>
-            <div id="tagsWrap" class="tags-empty">As tags aparecerão aqui após a análise.</div>
+          <section class="metrics-grid" aria-label="Métricas">
+            <div class="metric-card">
+              <span>Arquivos</span>
+              <strong id="metricFiles">0</strong>
+            </div>
+            <div class="metric-card">
+              <span>Detecções</span>
+              <strong id="metricDetections">0</strong>
+            </div>
+            <div class="metric-card">
+              <span>Inferência</span>
+              <strong id="metricInference">0 ms</strong>
+            </div>
+            <div class="metric-card">
+              <span>Tags únicas</span>
+              <strong id="metricUnique">0</strong>
+            </div>
           </section>
 
           <section>
-            <h3>Detecções</h3>
+            <h4>Tags detectadas</h4>
+            <div id="tagsWrap" class="tags-empty">Sem tags para exibir.</div>
+          </section>
+
+          <section>
+            <h4>Detecções</h4>
             <div class="table-wrap">
               <table>
-                <caption class="visually-hidden">Tabela de detecções identificadas</caption>
+                <caption class="sr-only">Tabela de objetos detectados</caption>
                 <thead>
                   <tr>
-                    <th>Objeto</th>
-                    <th>Confiança</th>
-                    <th>Bounding Box</th>
+                    <th scope="col">Objeto</th>
+                    <th scope="col">Confiança</th>
+                    <th scope="col">Bounding box</th>
                   </tr>
                 </thead>
                 <tbody id="detectionsBody">
                   <tr>
-                    <td colspan="3" class="muted">Sem dados.</td>
+                    <td colspan="3" class="td-empty">Nenhuma detecção disponível.</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </section>
-
-          <section class="metrics" id="metricsWrap">
-            <div>
-              <span>Total de detecções</span>
-              <strong id="metricDetections">0</strong>
-            </div>
-            <div>
-              <span>Tempo de inferência</span>
-              <strong id="metricInference">0 ms</strong>
-            </div>
-            <div>
-              <span>Tags únicas</span>
-              <strong id="metricUnique">0</strong>
-            </div>
-          </section>
         </article>
 
-        <article class="card history-panel">
-          <div class="section-head">
-            <h2>Histórico local</h2>
-            <button type="button" id="clearHistoryBtn" class="btn btn-ghost">Limpar histórico</button>
+        <article class="card section-card reveal">
+          <div class="header-inline">
+            <h3>Resultado do lote</h3>
+            <span class="help-text">Exibido quando o modo lote estiver ativo</span>
           </div>
-          <p class="panel-subtitle">Últimas análises salvas no navegador.</p>
+          <div id="batchResults" class="batch-empty">Sem análises em lote até o momento.</div>
+        </article>
+
+        <article class="card section-card reveal">
+          <div class="header-inline">
+            <h3>Histórico local</h3>
+            <button type="button" id="clearHistoryBtn" class="btn btn-tiny">Limpar histórico</button>
+          </div>
+          <div class="history-tools">
+            <label class="sr-only" for="historySearch">Buscar no histórico</label>
+            <input id="historySearch" type="search" placeholder="Buscar por arquivo, tag ou data" />
+          </div>
           <ul id="historyList" class="history-list" aria-live="polite"></ul>
         </article>
-      </div>
+      </section>
     </section>
   </main>
 </body>
