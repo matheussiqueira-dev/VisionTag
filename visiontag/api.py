@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import logging
 from collections import Counter
 from contextlib import asynccontextmanager
@@ -9,7 +11,7 @@ from time import monotonic
 from typing import List
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
@@ -17,16 +19,24 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
 from .detector import DetectionOptions
-from .errors import AppError, InvalidInputError, PayloadTooLargeError, UnsupportedMediaTypeError, register_exception_handlers
+from .errors import (
+    AppError,
+    InvalidInputError,
+    PayloadTooLargeError,
+    ProcessingTimeoutError,
+    UnsupportedMediaTypeError,
+    register_exception_handlers,
+)
 from .logging_config import configure_logging
 from .remote_fetch import fetch_remote_image
 from .schemas import (
+    AdminOverviewResponse,
     BatchDetectResponse,
     BatchItemResult,
     BatchSummary,
-    AdminOverviewResponse,
     CacheClearResponse,
     CacheStatsResponse,
+    DetectBase64Request,
     DetectUrlRequest,
     DetectionResult,
     HealthResponse,
@@ -116,6 +126,16 @@ def create_app(app_settings: Settings) -> FastAPI:
         try:
             response = await call_next(request)
             status_code = response.status_code
+        except AppError as exc:
+            status_code = exc.status_code
+            latency_ms = (monotonic() - started) * 1000
+            app.state.telemetry.record_request(path=request.url.path, status_code=status_code, latency_ms=latency_ms)
+            raise
+        except HTTPException as exc:
+            status_code = exc.status_code
+            latency_ms = (monotonic() - started) * 1000
+            app.state.telemetry.record_request(path=request.url.path, status_code=status_code, latency_ms=latency_ms)
+            raise
         except Exception:
             latency_ms = (monotonic() - started) * 1000
             app.state.telemetry.record_request(path=request.url.path, status_code=status_code, latency_ms=latency_ms)
@@ -165,6 +185,31 @@ def create_app(app_settings: Settings) -> FastAPI:
 
         return data
 
+    def decode_base64_payload(raw_payload: str) -> bytes:
+        candidate = (raw_payload or "").strip()
+        if not candidate:
+            raise InvalidInputError("Payload base64 vazio.")
+
+        if candidate.lower().startswith("data:"):
+            if ";base64," not in candidate:
+                raise InvalidInputError("Data URL base64 invalida.")
+            prefix, encoded = candidate.split(",", 1)
+            declared_content_type = prefix[5:].split(";", 1)[0].strip().lower()
+            if declared_content_type and not is_allowed_content_type(declared_content_type):
+                raise UnsupportedMediaTypeError("Formato base64 nao suportado.")
+            candidate = encoded.strip()
+
+        try:
+            decoded = base64.b64decode(candidate, validate=True)
+        except binascii.Error as exc:
+            raise InvalidInputError("Payload base64 invalido.") from exc
+
+        if not decoded:
+            raise InvalidInputError("Payload base64 vazio.")
+        if len(decoded) > app_settings.max_upload_bytes:
+            raise PayloadTooLargeError(f"Arquivo maior que {app_settings.max_upload_mb} MB.")
+        return decoded
+
     def principal_id_from_request(request: Request) -> str:
         principal = getattr(request.state, "principal", None)
         return getattr(principal, "key_id", "anonymous")
@@ -179,14 +224,22 @@ def create_app(app_settings: Settings) -> FastAPI:
     ) -> DetectionResult:
         service = app.state.detection_service_provider.get()
         async with app.state.inference_semaphore:
-            return await asyncio.to_thread(
-                service.detect_from_bytes,
-                payload=payload,
-                options=options,
-                source=source,
-                principal_id=principal_id,
-                request_id=request_id,
-            )
+            try:
+                return await asyncio.wait_for(
+                    asyncio.to_thread(
+                        service.detect_from_bytes,
+                        payload=payload,
+                        options=options,
+                        source=source,
+                        principal_id=principal_id,
+                        request_id=request_id,
+                    ),
+                    timeout=app_settings.inference_timeout_seconds,
+                )
+            except asyncio.TimeoutError as exc:
+                raise ProcessingTimeoutError(
+                    f"Tempo limite de inferencia excedido ({app_settings.inference_timeout_seconds}s)."
+                ) from exc
 
     def build_metrics_response() -> TelemetryResponse:
         snapshot = app.state.telemetry.snapshot()
@@ -197,7 +250,10 @@ def create_app(app_settings: Settings) -> FastAPI:
             detections_total=snapshot.detections_total,
             cache_hits=snapshot.cache_hits,
             average_latency_ms=snapshot.average_latency_ms,
+            p95_latency_ms=snapshot.p95_latency_ms,
+            p99_latency_ms=snapshot.p99_latency_ms,
             requests_by_path=snapshot.requests_by_path,
+            requests_by_status_class=snapshot.requests_by_status_class,
         )
 
     def build_runtime_response() -> RuntimeSettingsResponse:
@@ -212,6 +268,7 @@ def create_app(app_settings: Settings) -> FastAPI:
             cache_ttl_seconds=app_settings.cache_ttl_seconds,
             cache_max_items=app_settings.cache_max_items,
             max_concurrent_inference=app_settings.max_concurrent_inference,
+            inference_timeout_seconds=app_settings.inference_timeout_seconds,
             cors_origins=list(app_settings.cors_origins),
             enable_gzip=app_settings.enable_gzip,
             remote_fetch_timeout_seconds=app_settings.remote_fetch_timeout_seconds,
@@ -368,6 +425,25 @@ def create_app(app_settings: Settings) -> FastAPI:
             payload=payload,
             options=options,
             source="remote_url",
+            principal_id=principal_id_from_request(request),
+            request_id=request.state.request_id,
+        )
+
+    @app.post(
+        "/api/v1/detect/base64",
+        response_model=DetectionResult,
+        dependencies=[Depends(require_access("detect", apply_rate_limit=True))],
+    )
+    async def detect_base64(
+        request: Request,
+        body: DetectBase64Request,
+        options: DetectionOptions = Depends(detection_options_dependency),
+    ) -> DetectionResult:
+        payload = decode_base64_payload(body.image_base64)
+        return await run_detection_inference(
+            payload=payload,
+            options=options,
+            source="base64_upload",
             principal_id=principal_id_from_request(request),
             request_id=request.state.request_id,
         )

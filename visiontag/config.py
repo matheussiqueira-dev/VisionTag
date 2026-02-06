@@ -76,6 +76,7 @@ class Settings:
     rate_limit_per_minute: int = 120
     log_level: str = "INFO"
     max_concurrent_inference: int = 2
+    inference_timeout_seconds: int = 25
     cors_origins: Tuple[str, ...] = ("*",)
     enable_gzip: bool = True
     remote_fetch_timeout_seconds: int = 8
@@ -105,6 +106,11 @@ class Settings:
             rate_limit_per_minute=_parse_int(os.getenv("VISIONTAG_RATE_LIMIT_PER_MINUTE"), default=120, minimum=10),
             log_level=os.getenv("VISIONTAG_LOG_LEVEL", "INFO").upper(),
             max_concurrent_inference=_parse_int(os.getenv("VISIONTAG_MAX_CONCURRENT_INFERENCE"), default=2, minimum=1),
+            inference_timeout_seconds=_parse_int(
+                os.getenv("VISIONTAG_INFERENCE_TIMEOUT_SECONDS"),
+                default=25,
+                minimum=1,
+            ),
             cors_origins=_parse_csv(os.getenv("VISIONTAG_CORS_ORIGINS", "*")),
             enable_gzip=_parse_bool(os.getenv("VISIONTAG_ENABLE_GZIP"), default=True),
             remote_fetch_timeout_seconds=_parse_int(

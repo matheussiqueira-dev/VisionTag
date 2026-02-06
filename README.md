@@ -1,93 +1,109 @@
-# VisionTag Frontend
+# VisionTag Backend
 
-Frontend profissional para análise de imagens com foco em usabilidade, acessibilidade, performance e operação em tempo real. A interface consome a API do VisionTag para detecção visual e oferece fluxo completo para modo único, lote e URL remota.
+API de detecção visual orientada a produção, com contratos versionados, segurança por escopo, telemetria operacional e pipeline de inferência com controle de concorrência.
 
-## Visão Geral do Frontend
+## Visão Geral do Backend
 
-O frontend do VisionTag foi projetado para equipes que precisam de produtividade operacional sem abrir mão de qualidade visual.
+O backend do VisionTag transforma imagens em metadados estruturados (tags e bounding boxes) para fluxos de produto e operação.
 
-Objetivos principais:
-- reduzir tempo de análise visual;
-- melhorar previsibilidade dos fluxos de detecção;
-- entregar feedback claro de status, resultados e saúde operacional.
+Casos de uso:
+- análise de imagem única;
+- análise em lote;
+- análise por URL remota;
+- análise por payload base64;
+- observabilidade e gestão operacional via endpoints administrativos.
 
-Público-alvo:
-- analistas de operação;
-- squads de produto e engenharia;
-- times que validam modelos de visão computacional em ambiente real.
+## Arquitetura Adotada
 
-## Stack e Tecnologias Utilizadas
+Arquitetura: **monólito modular** com responsabilidades separadas por camada.
 
-- HTML5 semântico
-- CSS3 com design tokens e componentes reutilizáveis
-- JavaScript ES Modules (arquitetura modular sem framework)
-- Integração com API REST (`/api/v1/*`)
-- Persistência local com `localStorage`
+- `visiontag/api.py`: camada HTTP, contratos, middlewares e versionamento.
+- `visiontag/services/detection_service.py`: orquestração de detecção, cache e telemetria.
+- `visiontag/detector.py`: domínio de inferência YOLO e filtros de detecção.
+- `visiontag/security.py`: autenticação, autorização por escopo e rate limiting.
+- `visiontag/remote_fetch.py`: fetch remoto com hardening SSRF.
+- `visiontag/telemetry.py`: métricas operacionais e trilha recente de análises.
+- `visiontag/errors.py`: taxonomia de erros e handlers padronizados.
 
-## Funcionalidades Principais
+### Decisões Técnicas Relevantes
 
-- Upload de imagem única e lote
-- Análise por URL remota
-- Parâmetros avançados de inferência (confiança, área mínima, include/exclude labels)
-- Presets rápidos e presets personalizados persistidos localmente
-- Histórico local com busca
-- Exportação de relatório JSON
-- Painel operacional (overview admin, runtime, atividade recente e limpeza de cache)
-- Atalhos de teclado para fluxo rápido
-- Controles de acessibilidade:
-  - alto contraste
-  - modo compacto
-- Insights visuais de detecção (KPIs + distribuição por label)
+- inferência executada em thread (`asyncio.to_thread`) para não bloquear o event loop;
+- limite de concorrência por semáforo (`max_concurrent_inference`);
+- timeout de inferência configurável (`inference_timeout_seconds`);
+- contratos explícitos com Pydantic para respostas e requests;
+- cache por hash de payload + opções (TTL e capacidade configuráveis);
+- rastreabilidade via `X-Request-ID`.
 
-## Arquitetura Frontend
+## Tecnologias Utilizadas
 
-Estrutura modular:
+- Python 3.10+
+- FastAPI
+- Pydantic v2
+- Uvicorn
+- Ultralytics YOLOv8
+- OpenCV
+- NumPy
+- httpx
+- Pytest
 
-```text
-visiontag/static/
-  index.html
-  styles.css
-  js/
-    app.js        # estado, orquestração e eventos
-    ui.js         # renderização e manipulação de DOM
-    api.js        # cliente HTTP da API
-    storage.js    # persistência local
-    helpers.js    # utilitários puros (formatação, insights, debounce)
-    constants.js  # constantes e chaves da aplicação
-```
+## Endpoints da API
 
-Padrões adotados:
-- separação de responsabilidades por módulo;
-- funções puras para transformação de dados;
-- renderização incremental por estado;
-- persistência de preferências sem armazenar segredos sensíveis (API key não persiste).
+### Core de Detecção
+- `POST /api/v1/detect` (multipart upload)
+- `POST /api/v1/detect/batch` (multipart múltiplo)
+- `POST /api/v1/detect/url` (URL remota)
+- `POST /api/v1/detect/base64` (payload base64)
+- `POST /detect` (legado)
 
-## UI/UX e Design System
+### Catálogo e Saúde
+- `GET /api/v1/health`
+- `GET /api/v1/labels`
 
-### Diretrizes aplicadas
-- hierarquia visual clara e alta legibilidade;
-- feedback contínuo de estado (loading, sucesso, erro);
-- consistência tipográfica e de espaçamento;
-- componentes reutilizáveis para listas, chips, cards e painéis.
+### Operação/Admin
+- `GET /api/v1/metrics`
+- `GET /api/v1/admin/runtime`
+- `GET /api/v1/admin/recent`
+- `GET /api/v1/admin/overview`
+- `GET /api/v1/admin/cache`
+- `DELETE /api/v1/admin/cache`
 
-### Tokens visuais
-- paleta semântica com variáveis CSS (`:root`);
-- estados de interação (hover/focus/disabled);
-- modo de alto contraste por atributo `data-contrast`;
-- densidade visual ajustável por `data-density`.
+## Segurança e Confiabilidade
 
-### Acessibilidade (boas práticas WCAG)
-- skip-link para conteúdo principal;
-- foco visível em elementos interativos;
-- áreas com `aria-live` para feedback dinâmico;
-- navegação por teclado e atalhos;
-- suporte a `prefers-reduced-motion`.
+### Autenticação e Autorização
+- API key via `X-API-Key` ou `Authorization: Bearer`.
+- Escopos suportados:
+  - `detect`
+  - `admin`
+- Rate limit por identidade com janela deslizante.
+- Header `Retry-After` em resposta `429`.
+
+### Hardening de Entrada
+- validação de tipo e tamanho de upload;
+- validação de payload base64 (incluindo Data URL);
+- proteção SSRF em URL remota:
+  - bloqueio de hosts locais e IPs privados/reservados;
+  - validação de portas (80/443);
+  - validação de cadeia de redirecionamentos;
+  - resolução DNS com bloqueio de destino interno.
+
+### Tratamento de Erros
+- erros de domínio padronizados (`error.code`, `request_id`, `details`);
+- timeout de inferência com erro explícito (`processing_timeout`);
+- fallback seguro para exceções não tratadas.
+
+## Observabilidade
+
+Métricas disponíveis:
+- total de requests, erros, detecções e cache hits;
+- latência média, p95 e p99;
+- requests por rota;
+- requests por classe de status (`2xx`, `4xx`, `5xx`);
+- visão consolidada em `/api/v1/admin/overview`.
 
 ## Setup e Execução
 
 ### Pré-requisitos
 - Python 3.10+
-- Backend VisionTag em execução local
 
 ### Instalação
 ```bash
@@ -101,48 +117,83 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-### Rodar aplicação
+### Execução
 ```bash
 uvicorn visiontag.api:app --host 0.0.0.0 --port 8000
 ```
 
-Acessar:
-- Frontend: `http://localhost:8000/`
-- API Docs: `http://localhost:8000/docs`
+### Acessos
+- API: `http://localhost:8000`
+- Swagger: `http://localhost:8000/docs`
 
-## Build e Qualidade
+## Configuração por Variáveis de Ambiente
 
-Validações executadas no frontend:
+- `VISIONTAG_APP_NAME`
+- `VISIONTAG_APP_VERSION`
+- `VISIONTAG_MODEL_PATH`
+- `VISIONTAG_MAX_UPLOAD_MB`
+- `VISIONTAG_MAX_REMOTE_IMAGE_MB`
+- `VISIONTAG_REMOTE_FETCH_TIMEOUT_SECONDS`
+- `VISIONTAG_MAX_DIMENSION`
+- `VISIONTAG_MAX_BATCH_FILES`
+- `VISIONTAG_CACHE_TTL_SECONDS`
+- `VISIONTAG_CACHE_MAX_ITEMS`
+- `VISIONTAG_MAX_CONCURRENT_INFERENCE`
+- `VISIONTAG_INFERENCE_TIMEOUT_SECONDS`
+- `VISIONTAG_AUTH_REQUIRED`
+- `VISIONTAG_DEFAULT_API_KEY`
+- `VISIONTAG_API_KEYS` (ex.: `key1:detect|admin,key2:detect`)
+- `VISIONTAG_RATE_LIMIT_PER_MINUTE`
+- `VISIONTAG_CORS_ORIGINS`
+- `VISIONTAG_ENABLE_GZIP`
+- `VISIONTAG_LOG_LEVEL`
 
-```bash
-node --check visiontag/static/js/app.js
-node --check visiontag/static/js/ui.js
-node --check visiontag/static/js/helpers.js
-node --check visiontag/static/js/storage.js
+## Estrutura do Projeto
+
+```text
+visiontag/
+  api.py
+  config.py
+  detector.py
+  errors.py
+  logging_config.py
+  remote_fetch.py
+  schemas.py
+  security.py
+  telemetry.py
+  utils.py
+  services/
+    detection_service.py
+tests/
+  test_api_backend.py
+  test_detection_service.py
+  test_remote_fetch.py
+  test_security.py
+  test_utils.py
 ```
 
-Validação da suíte do projeto:
+## Boas Práticas e Padrões
+
+- SOLID/DRY na separação de responsabilidades;
+- contratos de API tipados e versionados;
+- validação defensiva de entradas;
+- telemetria operacional embutida;
+- tratamento padronizado de falhas;
+- testes automatizados para contratos e segurança.
+
+## Testes
 
 ```bash
 python -m pytest -q
 ```
 
-## Boas Práticas Adotadas
-
-- estado centralizado com fluxo previsível;
-- renderização desacoplada do transporte HTTP;
-- persistência local com limites e saneamento;
-- debounce em busca para melhor responsividade;
-- foco em acessibilidade e UX operacional;
-- nomenclatura clara e manutenção simples.
-
 ## Melhorias Futuras
 
-- testes e2e de interface (Playwright);
-- internacionalização (i18n);
-- gráficos avançados de operação;
-- tema claro/escuro completo com preferências do sistema;
-- PWA para uso offline parcial.
+- métricas nativas em formato Prometheus/OpenTelemetry;
+- fila assíncrona para processamento massivo;
+- trilha de auditoria persistida em banco;
+- rotação de segredos integrada (Vault/KMS);
+- testes de carga com perfis de concorrência.
 
 Autoria: Matheus Siqueira  
 Website: https://www.matheussiqueira.dev/

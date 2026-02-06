@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import ipaddress
+import socket
 from urllib.parse import urlsplit
 
 import httpx
@@ -9,6 +11,7 @@ from .errors import InvalidInputError, PayloadTooLargeError, UnsupportedMediaTyp
 from .utils import is_allowed_content_type
 
 BLOCKED_HOSTS = {"localhost", "localhost.localdomain"}
+ALLOWED_PORTS = {80, 443}
 
 
 def validate_remote_image_url(url: str) -> None:
@@ -23,6 +26,9 @@ def validate_remote_image_url(url: str) -> None:
     hostname = (parsed.hostname or "").strip().lower()
     if not hostname:
         raise InvalidInputError("Hostname invalido na URL.")
+
+    if parsed.port is not None and parsed.port not in ALLOWED_PORTS:
+        raise InvalidInputError("Porta nao permitida para download remoto.")
 
     if hostname in BLOCKED_HOSTS or hostname.endswith(".local"):
         raise InvalidInputError("Hostname bloqueado por politica de seguranca.")
@@ -43,6 +49,54 @@ def validate_remote_image_url(url: str) -> None:
         raise InvalidInputError("Endereco IP nao permitido por politica de seguranca.")
 
 
+def _is_forbidden_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_reserved
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+def resolve_hostname_ips(hostname: str) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    try:
+        records = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        raise InvalidInputError("Nao foi possivel resolver o hostname informado.") from exc
+
+    resolved_ips: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
+    for record in records:
+        address_text = str(record[4][0])
+        try:
+            resolved_ips.add(ipaddress.ip_address(address_text))
+        except ValueError:
+            continue
+
+    if not resolved_ips:
+        raise InvalidInputError("Hostname sem endereco IP valido.")
+    return resolved_ips
+
+
+async def ensure_hostname_public_resolution(url: str) -> None:
+    hostname = (urlsplit(url).hostname or "").strip().lower()
+    if not hostname:
+        raise InvalidInputError("Hostname invalido na URL.")
+
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        ips = await asyncio.to_thread(resolve_hostname_ips, hostname)
+        for resolved_ip in ips:
+            if _is_forbidden_ip(resolved_ip):
+                raise InvalidInputError("Hostname resolve para endereco IP nao permitido.")
+        return
+
+    if _is_forbidden_ip(ip):
+        raise InvalidInputError("Endereco IP nao permitido por politica de seguranca.")
+
+
 def validate_response_url_chain(response: httpx.Response) -> None:
     urls = [str(item.request.url) for item in response.history]
     urls.append(str(response.request.url))
@@ -57,6 +111,7 @@ async def fetch_remote_image(
     max_bytes: int,
 ) -> bytes:
     validate_remote_image_url(url)
+    await ensure_hostname_public_resolution(url)
 
     timeout = httpx.Timeout(timeout=float(timeout_seconds))
     headers = {"User-Agent": "VisionTag/2.2 (+remote-image-fetch)"}
@@ -73,6 +128,9 @@ async def fetch_remote_image(
             raise InvalidInputError("Falha de rede ao acessar URL informada.") from exc
 
         validate_response_url_chain(response)
+        for history_response in response.history:
+            await ensure_hostname_public_resolution(str(history_response.request.url))
+        await ensure_hostname_public_resolution(str(response.request.url))
 
         content_length = (response.headers.get("content-length") or "").strip()
         if content_length:

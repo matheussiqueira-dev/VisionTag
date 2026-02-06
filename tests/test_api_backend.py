@@ -1,6 +1,11 @@
+import base64
+import time
+
 from fastapi.testclient import TestClient
 
-from visiontag.api import app
+from visiontag.api import app, create_app
+from visiontag.config import Settings
+from visiontag.security import SlidingWindowRateLimiter
 from visiontag.schemas import BoundingBox, DetectionItem, DetectionResult
 
 
@@ -83,6 +88,7 @@ def test_admin_metrics_requires_admin_scope():
     assert denied.status_code == 403
     assert allowed.status_code == 200
     assert "requests_total" in allowed.json()
+    assert "p95_latency_ms" in allowed.json()
 
 
 def test_batch_endpoint_returns_summary():
@@ -129,6 +135,32 @@ def test_detect_url_endpoint_returns_contract(monkeypatch):
     assert payload["cached"] is False
 
 
+def test_detect_base64_endpoint_returns_contract():
+    provider = FakeProvider()
+    app.state.detection_service_provider = provider
+    encoded = base64.b64encode(b"fake-image").decode("ascii")
+
+    with TestClient(app) as client:
+        response = client.post("/api/v1/detect/base64", json={"image_base64": encoded})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tags"] == ["mesa"]
+    assert payload["total_detections"] == 1
+
+
+def test_detect_base64_endpoint_rejects_invalid_payload():
+    provider = FakeProvider()
+    app.state.detection_service_provider = provider
+
+    with TestClient(app) as client:
+        response = client.post("/api/v1/detect/base64", json={"image_base64": "%%%not-base64%%%"})
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "invalid_input"
+
+
 def test_admin_overview_returns_contract():
     provider = FakeProvider()
     provider._cache_items = 7
@@ -167,3 +199,69 @@ def test_admin_cache_clear_returns_removed_items():
     assert response.status_code == 200
     payload = response.json()
     assert payload["removed_items"] == 4
+
+
+def test_detect_rate_limit_returns_retry_after_header():
+    provider = FakeProvider()
+    app.state.detection_service_provider = provider
+    app.state.rate_limiter = SlidingWindowRateLimiter(limit=1, window_seconds=60)
+
+    with TestClient(app) as client:
+        first = client.post(
+            "/api/v1/detect",
+            files={"file": ("sample.png", b"fake-image", "image/png")},
+        )
+        second = client.post(
+            "/api/v1/detect",
+            files={"file": ("sample.png", b"fake-image", "image/png")},
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert "Retry-After" in second.headers
+
+
+def test_detect_endpoint_returns_processing_timeout_for_slow_inference():
+    class SlowService:
+        def detect_from_bytes(self, payload, options, **kwargs):
+            time.sleep(1.1)
+            return DetectionResult(
+                tags=["mesa"],
+                detections=[
+                    DetectionItem(
+                        label="mesa",
+                        confidence=0.88,
+                        bbox=BoundingBox(x1=1, y1=1, x2=10, y2=10),
+                    )
+                ],
+                total_detections=1,
+                inference_ms=1100.0,
+                cached=False,
+            )
+
+    class SlowProvider:
+        def __init__(self):
+            self.service = SlowService()
+            self.model_loaded = True
+
+        def get(self):
+            return self.service
+
+        def cache_size(self):
+            return 0
+
+        def clear_cache(self):
+            return 0
+
+    timeout_app = create_app(Settings(inference_timeout_seconds=1))
+    timeout_app.state.detection_service_provider = SlowProvider()
+
+    with TestClient(timeout_app) as client:
+        response = client.post(
+            "/api/v1/detect",
+            files={"file": ("sample.png", b"fake-image", "image/png")},
+        )
+
+    assert response.status_code == 504
+    payload = response.json()
+    assert payload["error"]["code"] == "processing_timeout"

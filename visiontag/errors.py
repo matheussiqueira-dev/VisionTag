@@ -54,6 +54,11 @@ class PayloadTooLargeError(AppError):
         super().__init__(status_code=413, code="payload_too_large", message=message)
 
 
+class ProcessingTimeoutError(AppError):
+    def __init__(self, message: str = "Tempo limite de processamento excedido."):
+        super().__init__(status_code=504, code="processing_timeout", message=message)
+
+
 def _request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None)
 
@@ -65,6 +70,7 @@ def error_response(
     message: str,
     request_id: str | None,
     details: Any = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     payload = {
         "detail": message,
@@ -75,18 +81,24 @@ def error_response(
             "details": details,
         }
     }
-    return JSONResponse(status_code=status_code, content=payload)
+    return JSONResponse(status_code=status_code, content=payload, headers=headers)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError):
+        headers = None
+        if exc.code == "rate_limit_exceeded" and isinstance(exc.details, dict):
+            retry_after = exc.details.get("retry_after")
+            if retry_after is not None:
+                headers = {"Retry-After": str(retry_after)}
         return error_response(
             status_code=exc.status_code,
             code=exc.code,
             message=exc.message,
             details=exc.details,
             request_id=_request_id(request),
+            headers=headers,
         )
 
     @app.exception_handler(HTTPException)

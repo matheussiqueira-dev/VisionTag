@@ -62,7 +62,10 @@ class TelemetryResponse(BaseModel):
     detections_total: int = Field(..., ge=0)
     cache_hits: int = Field(..., ge=0)
     average_latency_ms: float = Field(..., ge=0)
+    p95_latency_ms: float = Field(..., ge=0)
+    p99_latency_ms: float = Field(..., ge=0)
     requests_by_path: Dict[str, int]
+    requests_by_status_class: Dict[str, int]
 
 
 class LabelsResponse(BaseModel):
@@ -81,6 +84,7 @@ class RuntimeSettingsResponse(BaseModel):
     cache_ttl_seconds: int = Field(..., ge=0)
     cache_max_items: int = Field(..., ge=1)
     max_concurrent_inference: int = Field(..., ge=1)
+    inference_timeout_seconds: int = Field(..., ge=1)
     cors_origins: List[str]
     enable_gzip: bool
     remote_fetch_timeout_seconds: int = Field(..., ge=1)
@@ -97,6 +101,11 @@ class CacheClearResponse(BaseModel):
 
 class DetectUrlRequest(BaseModel):
     image_url: HttpUrl
+
+
+class DetectBase64Request(BaseModel):
+    image_base64: str = Field(..., min_length=4, max_length=20_000_000)
+    filename: str | None = Field(default=None, max_length=160)
 
 
 class RecentDetectionEntry(BaseModel):

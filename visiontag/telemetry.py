@@ -16,7 +16,10 @@ class TelemetrySnapshot:
     detections_total: int
     cache_hits: int
     average_latency_ms: float
+    p95_latency_ms: float
+    p99_latency_ms: float
     requests_by_path: Dict[str, int]
+    requests_by_status_class: Dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -40,14 +43,20 @@ class TelemetryStore:
         self._detections_total = 0
         self._cache_hits = 0
         self._latency_total_ms = 0.0
+        self._latency_samples: Deque[float] = deque(maxlen=2048)
         self._requests_by_path: Dict[str, int] = defaultdict(int)
+        self._requests_by_status_class: Dict[str, int] = defaultdict(int)
         self._recent_detections: Deque[RecentDetection] = deque(maxlen=max(10, recent_capacity))
 
     def record_request(self, path: str, status_code: int, latency_ms: float) -> None:
         with self._lock:
+            safe_latency = max(0.0, latency_ms)
             self._requests_total += 1
-            self._latency_total_ms += max(0.0, latency_ms)
+            self._latency_total_ms += safe_latency
+            self._latency_samples.append(safe_latency)
             self._requests_by_path[path] += 1
+            status_class = f"{max(1, int(status_code)) // 100}xx"
+            self._requests_by_status_class[status_class] += 1
             if status_code >= 400:
                 self._errors_total += 1
 
@@ -86,9 +95,20 @@ class TelemetryStore:
             return list(self._recent_detections)[: max(1, limit)]
 
     def snapshot(self) -> TelemetrySnapshot:
+        def percentile(values: List[float], ratio: float) -> float:
+            if not values:
+                return 0.0
+            if len(values) == 1:
+                return float(values[0])
+            ordered = sorted(values)
+            index = int(round((len(ordered) - 1) * ratio))
+            index = min(max(index, 0), len(ordered) - 1)
+            return float(ordered[index])
+
         with self._lock:
             uptime = int(monotonic() - self._started_at)
             avg_latency = self._latency_total_ms / self._requests_total if self._requests_total else 0.0
+            samples = list(self._latency_samples)
             return TelemetrySnapshot(
                 uptime_seconds=uptime,
                 requests_total=self._requests_total,
@@ -96,5 +116,8 @@ class TelemetryStore:
                 detections_total=self._detections_total,
                 cache_hits=self._cache_hits,
                 average_latency_ms=round(avg_latency, 2),
+                p95_latency_ms=round(percentile(samples, 0.95), 2),
+                p99_latency_ms=round(percentile(samples, 0.99), 2),
                 requests_by_path=dict(sorted(self._requests_by_path.items())),
+                requests_by_status_class=dict(sorted(self._requests_by_status_class.items())),
             )
