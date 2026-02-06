@@ -45,6 +45,7 @@ Arquitetura adotada: **monólito modular** com separação clara de camadas.
 
 ### Frontend
 - `visiontag/static/js/app.js`: estado, fluxo da aplicação e eventos.
+- `visiontag/static/js/experience.js`: regras de jornada guiada, pré-validação e recomendações dinâmicas.
 - `visiontag/static/js/ui.js`: renderização e manipulação de DOM.
 - `visiontag/static/js/api.js`: cliente HTTP para endpoints versionados.
 - `visiontag/static/js/storage.js`: persistência local de histórico/preferências/presets.
@@ -104,6 +105,7 @@ Arquitetura adotada: **monólito modular** com separação clara de camadas.
 - fluxo guiado em 3 etapas (entrada, configuração e resultado);
 - cenários rápidos para iniciar o tipo de análise com um clique;
 - checklist de execução com pendências contextuais;
+- assistente de otimização com score de prontidão e recomendações acionáveis;
 - presets rápidos + presets personalizados persistentes;
 - filtros avançados (confiança, área mínima, include/exclude labels);
 - insights visuais de detecção (KPIs e distribuição por label);
@@ -119,6 +121,7 @@ Evoluções aplicadas para reduzir fricção e abandono:
 - **orientação progressiva**: stepper de jornada deixa explícito o próximo passo;
 - **entrada previsível**: separação clara entre lote por arquivos e lote por URLs;
 - **feedback antecipado**: checklist de pré-execução evita erro tardio;
+- **decisão assistida**: recomendações contextuais indicam ajustes de precisão e throughput;
 - **ação rápida**: cenários prontos para os fluxos mais frequentes;
 - **legibilidade operacional**: contexto ativo e painéis com hierarquia de decisão.
 
@@ -175,6 +178,7 @@ visiontag/
       app.js
       api.js
       constants.js
+      experience.js
       helpers.js
       storage.js
       ui.js

@@ -20,6 +20,14 @@ import {
   uniqueTags,
 } from "./helpers.js";
 import {
+  buildContextItems,
+  buildPreflightItems,
+  buildRecommendations,
+  deriveJourneyState,
+  hasConfigConflict,
+  parseBatchUrls,
+} from "./experience.js";
+import {
   clearHistory,
   loadCustomPresets,
   loadHistory,
@@ -99,116 +107,64 @@ function getCurrentAnalyzeLabel() {
   return state.mode === MODES.single ? "Analisar imagem" : "Analisar lote";
 }
 
-function normalizeCsvLabels(rawValue) {
-  return String(rawValue || "")
-    .split(",")
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-function hasConfigConflict() {
-  const include = new Set(normalizeCsvLabels(state.config.includeLabels));
-  const exclude = new Set(normalizeCsvLabels(state.config.excludeLabels));
-  for (const label of include) {
-    if (exclude.has(label)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function hasResultPayload() {
   return state.mode === MODES.single ? Boolean(state.singleResult) : Boolean(state.batchResult);
 }
 
-function inputReadiness() {
+function getBatchSize() {
   if (state.mode === MODES.single) {
-    const hasUrl = String(ui.dom.imageUrl.value || "").trim().length > 0;
-    return Boolean(state.selectedFile || hasUrl);
+    const hasSingleInput = Boolean(state.selectedFile || String(ui.dom.imageUrl.value || "").trim());
+    return hasSingleInput ? 1 : 0;
   }
-
-  if (state.batchSource === "urls") {
-    return state.batchUrls.length > 0;
-  }
-
-  return state.batchFiles.length > 0;
-}
-
-function buildContextItems() {
-  const modeText = state.mode === MODES.single ? "Modo: Único" : "Modo: Lote";
-  const sourceText =
-    state.mode === MODES.single
-      ? "Fonte: Upload/URL"
-      : state.batchSource === "urls"
-        ? "Fonte lote: URLs"
-        : "Fonte lote: Arquivos";
-  const entriesCount =
-    state.mode === MODES.single
-      ? state.selectedFile || String(ui.dom.imageUrl.value || "").trim()
-        ? 1
-        : 0
-      : state.batchSource === "urls"
-        ? state.batchUrls.length
-        : state.batchFiles.length;
-  const entriesText = `${entriesCount} entrada(s)`;
-  const confText = `Conf ${Number(state.config.conf).toFixed(2)}`;
-  const tagsText = `Max tags ${state.config.maxTags}`;
-  const filterText = `Filtro visual ${state.config.visualFilterPercent}%`;
-
-  return [modeText, sourceText, entriesText, confText, tagsText, filterText];
-}
-
-function buildPreflightItems() {
-  const inputReady = inputReadiness();
-  const configConflict = hasConfigConflict();
-  const apiKeyProvided = String(state.config.apiKey || "").trim().length > 0;
-
-  const items = [
-    {
-      ok: inputReady,
-      message: inputReady
-        ? "Entrada válida detectada para o modo atual."
-        : "Adicione uma imagem ou URL antes de executar a análise.",
-    },
-    {
-      ok: !configConflict,
-      message: configConflict
-        ? "Conflito de labels: a mesma label está em incluir e excluir."
-        : "Parâmetros de inferência consistentes.",
-    },
-    {
-      ok: true,
-      message: apiKeyProvided
-        ? "Autenticação ativa por API key."
-        : "API key opcional (somente necessária em ambientes protegidos).",
-    },
-  ];
-
-  return items;
+  return state.batchSource === "urls" ? state.batchUrls.length : state.batchFiles.length;
 }
 
 function renderGuidedExperience() {
-  const inputReady = inputReadiness();
-  const configReady = !hasConfigConflict();
-  const resultReady = hasResultPayload();
-  const preflightItems = buildPreflightItems();
+  const configConflict = hasConfigConflict(state.config);
+  const journey = deriveJourneyState({
+    mode: state.mode,
+    batchSource: state.batchSource,
+    selectedFile: state.selectedFile,
+    imageUrl: ui.dom.imageUrl.value,
+    batchFiles: state.batchFiles,
+    batchUrls: state.batchUrls,
+    configConflict,
+    hasResult: hasResultPayload(),
+  });
+
+  const batchSize = getBatchSize();
+  const preflightItems = buildPreflightItems({
+    journey,
+    configConflict,
+    batchSize,
+    hasApiKey: Boolean(String(state.config.apiKey || "").trim()),
+  });
   const preflightReady = preflightItems.every((item) => item.ok);
+  const recommendations = buildRecommendations({
+    mode: state.mode,
+    batchSource: state.batchSource,
+    config: state.config,
+    journey,
+    preflightItems,
+    singleResult: state.singleResult,
+    batchResult: state.batchResult,
+    batchSize,
+  });
 
-  ui.renderJourneySteps({ inputReady, configReady, resultReady });
-  ui.renderContextSummary(buildContextItems());
+  ui.renderJourneySteps(journey);
+  ui.renderContextSummary(
+    buildContextItems({
+      mode: state.mode,
+      batchSource: state.batchSource,
+      selectedFile: state.selectedFile,
+      imageUrl: ui.dom.imageUrl.value,
+      batchFiles: state.batchFiles,
+      batchUrls: state.batchUrls,
+      config: state.config,
+    })
+  );
   ui.renderPreflight(preflightItems, preflightReady);
-}
-
-function parseBatchUrls(rawValue) {
-  if (!rawValue) {
-    return [];
-  }
-
-  const parts = String(rawValue)
-    .split(/\r?\n|,/g)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return Array.from(new Set(parts)).slice(0, MAX_BATCH_FILES);
+  ui.renderRecommendations(recommendations);
 }
 
 function applyModeUI() {
@@ -259,7 +215,7 @@ function updateInputPreviewAndQueue() {
   }
 
   if (state.batchSource === "urls") {
-    state.batchUrls = parseBatchUrls(ui.dom.batchUrlsInput.value || "");
+    state.batchUrls = parseBatchUrls(ui.dom.batchUrlsInput.value || "", MAX_BATCH_FILES);
     setPreviewFromFile(null);
     ui.renderUrlQueue(state.batchUrls);
     renderGuidedExperience();
@@ -528,7 +484,7 @@ function switchBatchSource(nextSource) {
   if (state.batchSource === "urls") {
     state.batchFiles = [];
     ui.dom.fileInput.value = "";
-    state.batchUrls = parseBatchUrls(ui.dom.batchUrlsInput.value || "");
+    state.batchUrls = parseBatchUrls(ui.dom.batchUrlsInput.value || "", MAX_BATCH_FILES);
   } else {
     state.batchUrls = [];
     ui.dom.batchUrlsInput.value = "";
@@ -611,7 +567,7 @@ async function runAnalysis() {
     }
 
     if (state.batchSource === "urls") {
-      state.batchUrls = parseBatchUrls(ui.dom.batchUrlsInput.value || "");
+      state.batchUrls = parseBatchUrls(ui.dom.batchUrlsInput.value || "", MAX_BATCH_FILES);
       if (!state.batchUrls.length) {
         setStatus("Informe pelo menos uma URL para análise em lote.", STATUS_VARIANT.error);
         return;
@@ -898,7 +854,7 @@ function bindEvents() {
     renderHistory();
   }, 140);
   const debouncedBatchUrlsUpdate = debounce((value) => {
-    state.batchUrls = parseBatchUrls(value || "");
+    state.batchUrls = parseBatchUrls(value || "", MAX_BATCH_FILES);
     if (state.mode === MODES.batch && state.batchSource === "urls") {
       updateInputPreviewAndQueue();
       setStatus(`${state.batchUrls.length} URL(s) prontas para análise.`, STATUS_VARIANT.neutral);

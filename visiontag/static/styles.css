@@ -423,6 +423,71 @@ html[data-density="compact"] .ops-item {
   border-color: rgba(52, 211, 153, 0.42);
 }
 
+.recommendation-score {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.recommendation-score-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: #d8ebfb;
+}
+
+.recommendation-track {
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(122, 159, 185, 0.28);
+  background: rgba(8, 22, 36, 0.82);
+  overflow: hidden;
+}
+
+.recommendation-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(150deg, var(--accent-cyan), var(--accent-lime));
+  transition: width 220ms ease;
+}
+
+.recommendation-list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+}
+
+.recommendation-item {
+  border-radius: 10px;
+  border: 1px solid rgba(122, 160, 186, 0.26);
+  background: rgba(7, 20, 33, 0.76);
+  padding: 9px 10px;
+  display: grid;
+  gap: 4px;
+  color: var(--text-soft);
+  font-size: 0.75rem;
+}
+
+.recommendation-item strong {
+  font-size: 0.76rem;
+}
+
+.recommendation-item.is-success {
+  border-color: rgba(52, 211, 153, 0.44);
+}
+
+.recommendation-item.is-warning {
+  border-color: rgba(245, 158, 11, 0.48);
+}
+
+.recommendation-item.is-info {
+  border-color: rgba(38, 198, 218, 0.42);
+}
+
 .segmented {
   margin-top: 12px;
   display: grid;

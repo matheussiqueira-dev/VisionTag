@@ -9,6 +9,9 @@ const dom = {
   contextSummary: document.getElementById("contextSummary"),
   preflightBadge: document.getElementById("preflightBadge"),
   preflightList: document.getElementById("preflightList"),
+  recommendationBadge: document.getElementById("recommendationBadge"),
+  recommendationScore: document.getElementById("recommendationScore"),
+  recommendationList: document.getElementById("recommendationList"),
   quickSingleBtn: document.getElementById("quickSingleBtn"),
   quickBatchFilesBtn: document.getElementById("quickBatchFilesBtn"),
   quickBatchUrlsBtn: document.getElementById("quickBatchUrlsBtn"),
@@ -624,6 +627,91 @@ function renderPreflight(items, isReady) {
   dom.preflightList.appendChild(fragment);
 }
 
+function recommendationBadgeState(level) {
+  if (level === "excellent") {
+    return { label: "Excelente", className: "is-success" };
+  }
+  if (level === "good") {
+    return { label: "Bom", className: "is-warning" };
+  }
+  return { label: "Atenção", className: "is-error" };
+}
+
+function recommendationToneClass(tone) {
+  if (tone === "success") {
+    return "is-success";
+  }
+  if (tone === "warning") {
+    return "is-warning";
+  }
+  return "is-info";
+}
+
+function renderRecommendations(payload) {
+  if (!dom.recommendationList || !dom.recommendationScore || !dom.recommendationBadge) {
+    return;
+  }
+
+  const score = Math.max(0, Math.min(100, Number(payload?.score) || 0));
+  const level = String(payload?.level || "attention");
+  const entries = safeArray(payload?.items);
+
+  clearElement(dom.recommendationList);
+  clearElement(dom.recommendationScore);
+  dom.recommendationBadge.classList.remove("is-success", "is-warning", "is-error");
+
+  const badge = recommendationBadgeState(level);
+  dom.recommendationBadge.classList.add(badge.className);
+  dom.recommendationBadge.textContent = badge.label;
+
+  const scoreMeta = document.createElement("div");
+  scoreMeta.className = "recommendation-score-meta";
+
+  const scoreLabel = document.createElement("strong");
+  scoreLabel.textContent = "Score de prontidão";
+
+  const scoreValue = document.createElement("span");
+  scoreValue.className = "mono";
+  scoreValue.textContent = `${score}/100`;
+
+  scoreMeta.appendChild(scoreLabel);
+  scoreMeta.appendChild(scoreValue);
+  dom.recommendationScore.appendChild(scoreMeta);
+
+  const track = document.createElement("div");
+  track.className = "recommendation-track";
+  const fill = document.createElement("div");
+  fill.className = "recommendation-fill";
+  fill.style.width = `${score}%`;
+  track.appendChild(fill);
+  dom.recommendationScore.appendChild(track);
+
+  if (!entries.length) {
+    const item = document.createElement("li");
+    item.className = "recommendation-item is-info";
+    item.textContent = "Sem recomendações no momento.";
+    dom.recommendationList.appendChild(item);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  entries.forEach((entry) => {
+    const item = document.createElement("li");
+    item.className = `recommendation-item ${recommendationToneClass(entry?.tone)}`;
+
+    const title = document.createElement("strong");
+    title.textContent = String(entry?.title || "Recomendação");
+    item.appendChild(title);
+
+    const description = document.createElement("span");
+    description.textContent = String(entry?.description || "");
+    item.appendChild(description);
+
+    fragment.appendChild(item);
+  });
+  dom.recommendationList.appendChild(fragment);
+}
+
 function setMode(mode) {
   const isSingle = mode === MODES.single;
   document.body.dataset.mode = isSingle ? "single" : "batch";
@@ -907,6 +995,7 @@ export const ui = {
   renderJourneySteps,
   renderContextSummary,
   renderPreflight,
+  renderRecommendations,
   renderInsights,
   focusHistorySearch,
   openShortcuts,
