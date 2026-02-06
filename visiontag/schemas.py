@@ -84,6 +84,7 @@ class RuntimeSettingsResponse(BaseModel):
     cache_ttl_seconds: int = Field(..., ge=0)
     cache_max_items: int = Field(..., ge=1)
     max_concurrent_inference: int = Field(..., ge=1)
+    max_concurrent_remote_fetch: int = Field(..., ge=1)
     inference_timeout_seconds: int = Field(..., ge=1)
     cors_origins: List[str]
     enable_gzip: bool
@@ -106,6 +107,10 @@ class DetectUrlRequest(BaseModel):
 class DetectBase64Request(BaseModel):
     image_base64: str = Field(..., min_length=4, max_length=20_000_000)
     filename: str | None = Field(default=None, max_length=160)
+
+
+class BatchUrlDetectRequest(BaseModel):
+    image_urls: List[HttpUrl] = Field(..., min_length=1, max_length=25)
 
 
 class RecentDetectionEntry(BaseModel):

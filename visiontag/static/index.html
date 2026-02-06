@@ -71,6 +71,12 @@
 
         <article class="card section-card reveal">
           <h3>Entrada de arquivos</h3>
+          <div class="segmented segmented-source" role="group" aria-label="Fonte de entrada em lote">
+            <button type="button" id="batchSourceFilesBtn" class="segment is-active" aria-pressed="true">Lote por arquivos</button>
+            <button type="button" id="batchSourceUrlsBtn" class="segment" aria-pressed="false">Lote por URLs</button>
+          </div>
+          <p class="help-text" id="batchSourceHint">Fonte atual: arquivos.</p>
+
           <label class="dropzone" id="dropzone" for="fileInput" tabindex="0" aria-label="Área de upload">
             <input
               id="fileInput"
@@ -86,6 +92,15 @@
           </div>
 
           <ul id="fileQueue" class="file-queue" aria-label="Arquivos selecionados"></ul>
+
+          <label class="field-label field-label-stack" for="batchUrlsInput">URLs para lote (uma por linha)</label>
+          <textarea
+            id="batchUrlsInput"
+            class="batch-urls-input"
+            rows="5"
+            placeholder="https://exemplo.com/cam-1.jpg&#10;https://exemplo.com/cam-2.jpg"
+          ></textarea>
+          <p class="help-text">Use este campo quando o modo for <strong>lote</strong> e a fonte for <strong>URLs</strong>.</p>
 
           <label class="field-label" for="imageUrl">Ou analise por URL (modo imagem única)</label>
           <input id="imageUrl" type="url" placeholder="https://exemplo.com/imagem.jpg" />

@@ -5,6 +5,9 @@ const dom = {
   modeSingleBtn: document.getElementById("modeSingleBtn"),
   modeBatchBtn: document.getElementById("modeBatchBtn"),
   modeHint: document.getElementById("modeHint"),
+  batchSourceFilesBtn: document.getElementById("batchSourceFilesBtn"),
+  batchSourceUrlsBtn: document.getElementById("batchSourceUrlsBtn"),
+  batchSourceHint: document.getElementById("batchSourceHint"),
   presetButtons: Array.from(document.querySelectorAll(".preset-btn")),
   toggleContrastBtn: document.getElementById("toggleContrastBtn"),
   dropzone: document.getElementById("dropzone"),
@@ -13,6 +16,7 @@ const dom = {
   fileHint: document.getElementById("fileHint"),
   previewPane: document.getElementById("previewPane"),
   fileQueue: document.getElementById("fileQueue"),
+  batchUrlsInput: document.getElementById("batchUrlsInput"),
 
   confRange: document.getElementById("confRange"),
   confValue: document.getElementById("confValue"),
@@ -142,6 +146,31 @@ function renderFileQueue(files) {
     fragment.appendChild(li);
   });
 
+  dom.fileQueue.appendChild(fragment);
+}
+
+function renderUrlQueue(urls) {
+  clearElement(dom.fileQueue);
+  const entries = safeArray(urls).filter((url) => typeof url === "string" && url.trim());
+  if (!entries.length) {
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  entries.forEach((url, index) => {
+    const li = document.createElement("li");
+    li.className = "file-item";
+
+    const fileName = document.createElement("strong");
+    fileName.textContent = `${index + 1}. ${url}`;
+
+    const fileSize = document.createElement("span");
+    fileSize.textContent = "URL";
+
+    li.appendChild(fileName);
+    li.appendChild(fileSize);
+    fragment.appendChild(li);
+  });
   dom.fileQueue.appendChild(fragment);
 }
 
@@ -476,6 +505,7 @@ function renderCustomPresets(presets) {
 
 function setMode(mode) {
   const isSingle = mode === MODES.single;
+  document.body.dataset.mode = isSingle ? "single" : "batch";
 
   dom.modeSingleBtn.classList.toggle("is-active", isSingle);
   dom.modeBatchBtn.classList.toggle("is-active", !isSingle);
@@ -488,6 +518,16 @@ function setMode(mode) {
     ? "ou clique para selecionar um arquivo."
     : "ou clique para selecionar vários arquivos.";
   dom.modeHint.textContent = isSingle ? "Modo atual: imagem única." : "Modo atual: lote de imagens.";
+}
+
+function setBatchInputType(sourceType) {
+  const isFiles = sourceType !== "urls";
+  document.body.dataset.batchSource = isFiles ? "files" : "urls";
+  dom.batchSourceFilesBtn.classList.toggle("is-active", isFiles);
+  dom.batchSourceUrlsBtn.classList.toggle("is-active", !isFiles);
+  dom.batchSourceFilesBtn.setAttribute("aria-pressed", String(isFiles));
+  dom.batchSourceUrlsBtn.setAttribute("aria-pressed", String(!isFiles));
+  dom.batchSourceHint.textContent = isFiles ? "Fonte atual: arquivos." : "Fonte atual: URLs.";
 }
 
 function setFormValues(config) {
@@ -657,6 +697,12 @@ function renderOperationalOverview(overview) {
   const metrics = overview.metrics || {};
   const recent = overview.recent || {};
   const topTags = recent.top_tags || {};
+  const statusClasses = metrics.requests_by_status_class || {};
+  const statusText = Object.keys(statusClasses).length
+    ? Object.entries(statusClasses)
+        .map(([status, count]) => `${status}:${count}`)
+        .join(" • ")
+    : "sem dados";
   const topTagsText = Object.keys(topTags).length
     ? Object.entries(topTags)
         .map(([tag, count]) => `${tag} (${count})`)
@@ -672,7 +718,10 @@ function renderOperationalOverview(overview) {
       ["Cache hits", metrics.cache_hits],
       ["Cache itens", overview.cache_items],
       ["Latência média", `${metrics.average_latency_ms} ms`],
+      ["Latência p95", `${metrics.p95_latency_ms} ms`],
+      ["Latência p99", `${metrics.p99_latency_ms} ms`],
       ["Uptime", `${metrics.uptime_seconds}s`],
+      ["Status", statusText],
       ["Top tags", topTagsText],
     ],
     "Painel ainda não carregado."
@@ -688,6 +737,8 @@ function renderOperationalOverview(overview) {
       ["Upload máx", `${runtime.max_upload_mb} MB`],
       ["Batch máx", runtime.max_batch_files],
       ["Concorrência", runtime.max_concurrent_inference],
+      ["Fetch remoto", runtime.max_concurrent_remote_fetch],
+      ["Timeout inferência", `${runtime.inference_timeout_seconds}s`],
       ["TTL cache", `${runtime.cache_ttl_seconds}s`],
       ["GZip", runtime.enable_gzip ? "Ativo" : "Inativo"],
     ],
@@ -716,6 +767,7 @@ function closeShortcuts() {
 export const ui = {
   dom,
   setMode,
+  setBatchInputType,
   setFormValues,
   setUiSettings,
   setStatus,
@@ -724,6 +776,7 @@ export const ui = {
   setMetrics,
   renderSinglePreview,
   renderFileQueue,
+  renderUrlQueue,
   renderTags,
   renderTagDelta,
   renderDetections,

@@ -413,6 +413,10 @@ html[data-density="compact"] .ops-item {
   color: #cadff1;
 }
 
+.field-label-stack {
+  display: block;
+}
+
 .field-check {
   margin-top: 10px;
   display: flex;
@@ -541,6 +545,18 @@ input[type="password"] {
   padding: 10px;
 }
 
+textarea {
+  margin-top: 6px;
+  width: 100%;
+  border: 1px solid rgba(123, 158, 185, 0.34);
+  border-radius: 10px;
+  background: rgba(5, 15, 27, 0.86);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  padding: 10px;
+  resize: vertical;
+}
+
 input[type="search"]::placeholder {
   color: #7f99af;
 }
@@ -553,9 +569,38 @@ input[type="password"]::placeholder {
 
 input:focus-visible,
 button:focus-visible,
+textarea:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--accent-cyan);
   outline-offset: 2px;
+}
+
+.segmented-source {
+  margin-top: 10px;
+}
+
+.batch-urls-input {
+  min-height: 110px;
+}
+
+body[data-mode="single"] .segmented-source,
+body[data-mode="single"] #batchSourceHint,
+body[data-mode="single"] #batchUrlsInput,
+body[data-mode="single"] label[for="batchUrlsInput"],
+body[data-mode="single"] #batchUrlsInput + .help-text {
+  display: none;
+}
+
+body[data-mode="batch"][data-batch-source="files"] #batchUrlsInput,
+body[data-mode="batch"][data-batch-source="files"] label[for="batchUrlsInput"],
+body[data-mode="batch"][data-batch-source="files"] #batchUrlsInput + .help-text {
+  display: none;
+}
+
+body[data-mode="batch"][data-batch-source="urls"] .dropzone,
+body[data-mode="batch"][data-batch-source="urls"] .preview-pane,
+body[data-mode="batch"][data-batch-source="urls"] .file-queue {
+  display: none;
 }
 
 .action-row {

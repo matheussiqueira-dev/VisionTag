@@ -161,6 +161,36 @@ def test_detect_base64_endpoint_rejects_invalid_payload():
     assert payload["error"]["code"] == "invalid_input"
 
 
+def test_detect_url_batch_endpoint_returns_summary(monkeypatch):
+    provider = FakeProvider()
+    app.state.detection_service_provider = provider
+
+    async def fake_fetch_remote_image(*, url, timeout_seconds, max_bytes):
+        assert timeout_seconds >= 1
+        assert max_bytes > 0
+        assert url.startswith("https://example.com/")
+        return b"remote-image"
+
+    monkeypatch.setattr("visiontag.api.fetch_remote_image", fake_fetch_remote_image)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/detect/url/batch",
+            json={
+                "image_urls": [
+                    "https://example.com/camera-1.png",
+                    "https://example.com/camera-2.png",
+                ]
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["total_files"] == 2
+    assert payload["summary"]["success"] == 2
+    assert payload["summary"]["failed"] == 0
+
+
 def test_admin_overview_returns_contract():
     provider = FakeProvider()
     provider._cache_items = 7
@@ -186,6 +216,16 @@ def test_admin_overview_returns_contract():
     assert payload["recent"]["window_size"] >= 1
     assert "sources" in payload["recent"]
     assert isinstance(payload["recent_items"], list)
+
+
+def test_admin_runtime_returns_new_concurrency_fields():
+    with TestClient(app) as client:
+        response = client.get("/api/v1/admin/runtime", headers={"X-API-Key": app.state.settings.default_api_key})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "max_concurrent_remote_fetch" in payload
+    assert "inference_timeout_seconds" in payload
 
 
 def test_admin_cache_clear_returns_removed_items():

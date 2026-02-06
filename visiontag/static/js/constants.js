@@ -2,6 +2,7 @@ export const API_ROUTES = {
   detectSingle: "/api/v1/detect",
   detectBatch: "/api/v1/detect/batch",
   detectUrl: "/api/v1/detect/url",
+  detectBatchUrl: "/api/v1/detect/url/batch",
   metrics: "/api/v1/metrics",
   adminOverview: "/api/v1/admin/overview",
   adminCache: "/api/v1/admin/cache",

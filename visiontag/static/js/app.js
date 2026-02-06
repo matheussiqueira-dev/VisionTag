@@ -1,4 +1,4 @@
-import { clearOperationalCache, detectBatch, detectByUrl, detectSingle, fetchOperationalOverview } from "./api.js";
+import { clearOperationalCache, detectBatch, detectBatchByUrls, detectByUrl, detectSingle, fetchOperationalOverview } from "./api.js";
 import {
   CONFIG_PRESETS,
   DEFAULT_CONFIG,
@@ -35,6 +35,7 @@ import { ui } from "./ui.js";
 const savedPreferences = loadPreferences() || {};
 const savedUiSettings = loadUiSettings() || {};
 const initialMode = savedPreferences.mode === MODES.batch ? MODES.batch : MODES.single;
+const initialBatchSource = savedPreferences.batchSource === "urls" ? "urls" : "files";
 
 function normalizeConfig(candidate) {
   return {
@@ -58,9 +59,11 @@ function normalizeUiSettings(candidate) {
 
 const state = {
   mode: initialMode,
+  batchSource: initialBatchSource,
   config: normalizeConfig(savedPreferences.config),
   selectedFile: null,
   batchFiles: [],
+  batchUrls: [],
   previewUrl: null,
   singleResult: null,
   batchResult: null,
@@ -96,8 +99,21 @@ function getCurrentAnalyzeLabel() {
   return state.mode === MODES.single ? "Analisar imagem" : "Analisar lote";
 }
 
+function parseBatchUrls(rawValue) {
+  if (!rawValue) {
+    return [];
+  }
+
+  const parts = String(rawValue)
+    .split(/\r?\n|,/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return Array.from(new Set(parts)).slice(0, MAX_BATCH_FILES);
+}
+
 function applyModeUI() {
   ui.setMode(state.mode);
+  ui.setBatchInputType(state.batchSource);
   ui.dom.analyzeBtn.dataset.baseLabel = getCurrentAnalyzeLabel();
   ui.dom.analyzeBtn.textContent = ui.dom.analyzeBtn.dataset.baseLabel;
 }
@@ -129,6 +145,7 @@ function persistUserPreferences() {
   };
   savePreferences({
     mode: state.mode,
+    batchSource: state.batchSource,
     config: persistedConfig,
   });
 }
@@ -137,6 +154,13 @@ function updateInputPreviewAndQueue() {
   if (state.mode === MODES.single) {
     setPreviewFromFile(state.selectedFile);
     ui.renderFileQueue(state.selectedFile ? [state.selectedFile] : []);
+    return;
+  }
+
+  if (state.batchSource === "urls") {
+    state.batchUrls = parseBatchUrls(ui.dom.batchUrlsInput.value || "");
+    setPreviewFromFile(null);
+    ui.renderUrlQueue(state.batchUrls);
     return;
   }
 
@@ -292,13 +316,21 @@ function pushBatchHistory(payload) {
   const totalInference = successful.reduce((sum, item) => sum + (item.result?.inference_ms || 0), 0);
   const averageInference = successful.length ? Number((totalInference / successful.length).toFixed(2)) : 0;
 
+  const filesReference =
+    state.batchSource === "urls"
+      ? state.batchUrls.slice(0, MAX_BATCH_FILES)
+      : fileNameList(state.batchFiles);
+
   const entry = {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     at: nowPtBr(),
     mode: MODES.batch,
-    fileName: `Lote (${state.batchFiles.length} arquivos)`,
-    fileCount: state.batchFiles.length,
-    files: fileNameList(state.batchFiles),
+    fileName:
+      state.batchSource === "urls"
+        ? `Lote URLs (${filesReference.length} itens)`
+        : `Lote (${state.batchFiles.length} arquivos)`,
+    fileCount: filesReference.length,
+    files: filesReference,
     tags: uniqueTags(flattenBatchTags(payload)),
     totalDetections,
     inferenceMs: averageInference,
@@ -315,8 +347,10 @@ function setStatus(message, variant) {
 function clearCurrentSelection() {
   state.selectedFile = null;
   state.batchFiles = [];
+  state.batchUrls = [];
   ui.dom.fileInput.value = "";
   ui.dom.imageUrl.value = "";
+  ui.dom.batchUrlsInput.value = "";
   updateInputPreviewAndQueue();
 }
 
@@ -346,7 +380,13 @@ function assignFiles(files) {
     state.batchFiles = [];
     setStatus(`Arquivo pronto: ${state.selectedFile.name}`, STATUS_VARIANT.neutral);
   } else {
+    if (state.batchSource === "urls") {
+      state.batchSource = "files";
+      applyModeUI();
+    }
     state.batchFiles = incoming.slice(0, MAX_BATCH_FILES);
+    state.batchUrls = [];
+    ui.dom.batchUrlsInput.value = "";
     state.selectedFile = null;
     const limitNote = incoming.length > MAX_BATCH_FILES ? ` (limitado a ${MAX_BATCH_FILES})` : "";
     setStatus(`${state.batchFiles.length} arquivos prontos para análise${limitNote}.`, STATUS_VARIANT.neutral);
@@ -372,6 +412,23 @@ function switchMode(mode) {
   updateInputPreviewAndQueue();
   renderResultSurface();
   refreshActionAvailability();
+  persistUserPreferences();
+}
+
+function switchBatchSource(nextSource) {
+  state.batchSource = nextSource === "urls" ? "urls" : "files";
+  applyModeUI();
+
+  if (state.batchSource === "urls") {
+    state.batchFiles = [];
+    ui.dom.fileInput.value = "";
+    state.batchUrls = parseBatchUrls(ui.dom.batchUrlsInput.value || "");
+  } else {
+    state.batchUrls = [];
+    ui.dom.batchUrlsInput.value = "";
+  }
+
+  updateInputPreviewAndQueue();
   persistUserPreferences();
 }
 
@@ -401,7 +458,11 @@ function exportCurrentReport() {
       : {
           mode: MODES.batch,
           generatedAt: new Date().toISOString(),
-          files: fileNameList(state.batchFiles),
+          source: state.batchSource,
+          files:
+            state.batchSource === "urls"
+              ? state.batchUrls.slice(0, MAX_BATCH_FILES)
+              : fileNameList(state.batchFiles),
           config: state.config,
           result: state.batchResult,
         };
@@ -437,9 +498,19 @@ async function runAnalysis() {
     return;
   }
 
-  if (state.mode === MODES.batch && state.batchFiles.length === 0) {
-    setStatus("Selecione pelo menos uma imagem para análise em lote.", STATUS_VARIANT.error);
-    return;
+  if (state.mode === MODES.batch) {
+    if (state.batchSource === "files" && state.batchFiles.length === 0) {
+      setStatus("Selecione pelo menos uma imagem para análise em lote.", STATUS_VARIANT.error);
+      return;
+    }
+
+    if (state.batchSource === "urls") {
+      state.batchUrls = parseBatchUrls(ui.dom.batchUrlsInput.value || "");
+      if (!state.batchUrls.length) {
+        setStatus("Informe pelo menos uma URL para análise em lote.", STATUS_VARIANT.error);
+        return;
+      }
+    }
   }
 
   const controller = new AbortController();
@@ -462,7 +533,10 @@ async function runAnalysis() {
       pushSingleHistory(payload);
       setStatus("Análise concluída com sucesso.", STATUS_VARIANT.success);
     } else {
-      const payload = await detectBatch(state.batchFiles, state.config, controller.signal);
+      const payload =
+        state.batchSource === "urls"
+          ? await detectBatchByUrls(state.batchUrls, state.config, controller.signal)
+          : await detectBatch(state.batchFiles, state.config, controller.signal);
       state.batchResult = payload;
       state.tagDelta = null;
       pushBatchHistory(payload);
@@ -717,9 +791,18 @@ function bindEvents() {
     state.historyQuery = value || "";
     renderHistory();
   }, 140);
+  const debouncedBatchUrlsUpdate = debounce((value) => {
+    state.batchUrls = parseBatchUrls(value || "");
+    if (state.mode === MODES.batch && state.batchSource === "urls") {
+      updateInputPreviewAndQueue();
+      setStatus(`${state.batchUrls.length} URL(s) prontas para análise.`, STATUS_VARIANT.neutral);
+    }
+  }, 120);
 
   ui.dom.modeSingleBtn.addEventListener("click", () => switchMode(MODES.single));
   ui.dom.modeBatchBtn.addEventListener("click", () => switchMode(MODES.batch));
+  ui.dom.batchSourceFilesBtn.addEventListener("click", () => switchBatchSource("files"));
+  ui.dom.batchSourceUrlsBtn.addEventListener("click", () => switchBatchSource("urls"));
 
   ui.dom.presetButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -729,6 +812,9 @@ function bindEvents() {
 
   ui.dom.fileInput.addEventListener("change", (event) => {
     assignFiles(event.target.files);
+  });
+  ui.dom.batchUrlsInput.addEventListener("input", (event) => {
+    debouncedBatchUrlsUpdate(event.target.value || "");
   });
 
   ui.dom.confRange.addEventListener("input", updateConfigFromForm);

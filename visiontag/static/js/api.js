@@ -97,6 +97,27 @@ export async function detectBatch(files, config, signal) {
   return payload;
 }
 
+export async function detectBatchByUrls(imageUrls, config, signal) {
+  const queryString = buildQueryParams(config);
+  const headers = {
+    ...buildAuthHeaders(config),
+    "Content-Type": "application/json",
+  };
+
+  const response = await fetch(`${API_ROUTES.detectBatchUrl}?${queryString}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ image_urls: imageUrls }),
+    signal,
+  });
+
+  const payload = await parseJsonResponse(response);
+  if (!response.ok) {
+    throw new Error(parseResponseError(payload));
+  }
+  return payload;
+}
+
 export async function detectByUrl(imageUrl, config, signal) {
   const queryString = buildQueryParams(config);
   const headers = {
