@@ -34,6 +34,7 @@
     <nav class="top-actions" aria-label="Atalhos">
       <a href="/docs" target="_blank" rel="noopener noreferrer">Documentação da API</a>
       <a href="/api/v1/health" target="_blank" rel="noopener noreferrer">Health Check</a>
+      <button type="button" id="openShortcutsBtn" class="top-link-btn">Atalhos</button>
     </nav>
   </header>
 
@@ -110,6 +111,15 @@
             <output id="filterValue" class="mono">0%</output>
           </label>
           <input id="filterRange" type="range" min="0" max="95" step="1" value="0" />
+
+          <div class="preset-wrap" aria-label="Presets de inferência">
+            <span>Presets rápidos</span>
+            <div class="preset-row">
+              <button type="button" class="preset-btn" data-preset="balanced">Balanceado</button>
+              <button type="button" class="preset-btn" data-preset="highPrecision">Alta precisão</button>
+              <button type="button" class="preset-btn" data-preset="sensitivity">Sensível</button>
+            </div>
+          </div>
         </article>
 
         <div class="action-row reveal">
@@ -150,6 +160,11 @@
           <section>
             <h4>Tags detectadas</h4>
             <div id="tagsWrap" class="tags-empty">Sem tags para exibir.</div>
+          </section>
+
+          <section>
+            <h4>Comparativo de tags (última análise)</h4>
+            <div id="tagDeltaWrap" class="delta-empty">Sem comparação disponível.</div>
           </section>
 
           <section>
@@ -196,5 +211,18 @@
       </section>
     </section>
   </main>
+
+  <dialog id="shortcutsDialog" class="shortcuts-dialog" aria-labelledby="shortcutsTitle">
+    <div class="shortcuts-header">
+      <h2 id="shortcutsTitle">Atalhos de teclado</h2>
+      <button type="button" id="closeShortcutsBtn" class="btn btn-tiny">Fechar</button>
+    </div>
+    <ul>
+      <li><kbd>Ctrl</kbd> + <kbd>Enter</kbd> Executar análise</li>
+      <li><kbd>Ctrl</kbd> + <kbd>K</kbd> Focar busca no histórico</li>
+      <li><kbd>Ctrl</kbd> + <kbd>B</kbd> Alternar modo lote/imagem</li>
+      <li><kbd>Esc</kbd> Fechar modal de atalhos</li>
+    </ul>
+  </dialog>
 </body>
 </html>

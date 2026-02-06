@@ -58,3 +58,14 @@ export function makeReportFilename() {
 export function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
+
+export function computeTagDelta(previousTags, currentTags) {
+  const prev = new Set(safeArray(previousTags));
+  const curr = new Set(safeArray(currentTags));
+
+  const added = Array.from(curr).filter((tag) => !prev.has(tag));
+  const removed = Array.from(prev).filter((tag) => !curr.has(tag));
+  const kept = Array.from(curr).filter((tag) => prev.has(tag));
+
+  return { added, removed, kept };
+}

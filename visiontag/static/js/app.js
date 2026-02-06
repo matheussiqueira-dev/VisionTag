@@ -1,5 +1,6 @@
 import { detectBatch, detectSingle } from "./api.js";
 import {
+  CONFIG_PRESETS,
   DEFAULT_CONFIG,
   MAX_BATCH_FILES,
   MODES,
@@ -7,6 +8,7 @@ import {
 } from "./constants.js";
 import {
   clamp,
+  computeTagDelta,
   fileNameList,
   flattenBatchTags,
   makeReportFilename,
@@ -14,17 +16,32 @@ import {
   safeArray,
   uniqueTags,
 } from "./helpers.js";
-import { clearHistory, loadHistory, pushHistoryItem } from "./storage.js";
+import { clearHistory, loadHistory, loadPreferences, pushHistoryItem, savePreferences } from "./storage.js";
 import { ui } from "./ui.js";
 
+const savedPreferences = loadPreferences() || {};
+const initialMode = savedPreferences.mode === MODES.batch ? MODES.batch : MODES.single;
+
+function normalizeConfig(candidate) {
+  return {
+    conf: clamp(Number(candidate?.conf ?? DEFAULT_CONFIG.conf), 0.1, 0.95),
+    maxTags: clamp(Number(candidate?.maxTags ?? DEFAULT_CONFIG.maxTags), 1, 25),
+    minAreaPercent: clamp(Number(candidate?.minAreaPercent ?? DEFAULT_CONFIG.minAreaPercent), 0, 50),
+    includePerson: Boolean(candidate?.includePerson ?? DEFAULT_CONFIG.includePerson),
+    visualFilterPercent: clamp(Number(candidate?.visualFilterPercent ?? DEFAULT_CONFIG.visualFilterPercent), 0, 95),
+  };
+}
+
 const state = {
-  mode: MODES.single,
-  config: { ...DEFAULT_CONFIG },
+  mode: initialMode,
+  config: normalizeConfig(savedPreferences.config),
   selectedFile: null,
   batchFiles: [],
   previewUrl: null,
   singleResult: null,
   batchResult: null,
+  tagDelta: null,
+  previousSingleTags: [],
   history: loadHistory(),
   historyQuery: "",
   requestController: null,
@@ -60,6 +77,13 @@ function applyModeUI() {
 
 function syncConfigUI() {
   ui.setFormValues(state.config);
+}
+
+function persistUserPreferences() {
+  savePreferences({
+    mode: state.mode,
+    config: { ...state.config },
+  });
 }
 
 function updateInputPreviewAndQueue() {
@@ -133,6 +157,7 @@ function renderResultSurface() {
 
   if (state.mode === MODES.single && state.singleResult) {
     ui.renderTags(safeArray(state.singleResult.tags));
+    ui.renderTagDelta(state.tagDelta);
     ui.renderDetections(safeArray(state.singleResult.detections), minConfidence);
     ui.setMetrics(computeSingleMetrics(state.singleResult));
     ui.renderBatchResults(state.batchResult);
@@ -141,6 +166,7 @@ function renderResultSurface() {
 
   if (state.mode === MODES.batch && state.batchResult) {
     ui.renderTags(getActiveTags());
+    ui.renderTagDelta(null);
     ui.renderDetections(flattenBatchDetections(state.batchResult), minConfidence);
     ui.setMetrics(computeBatchMetrics(state.batchResult));
     ui.renderBatchResults(state.batchResult);
@@ -148,6 +174,7 @@ function renderResultSurface() {
   }
 
   ui.renderTags([]);
+  ui.renderTagDelta(null);
   ui.renderDetections([], minConfidence);
   ui.setMetrics({ files: 0, detections: 0, inference: 0, uniqueTags: 0 });
   ui.renderBatchResults(state.batchResult);
@@ -241,6 +268,7 @@ function clearCurrentSelection() {
 function clearResults() {
   state.singleResult = null;
   state.batchResult = null;
+  state.tagDelta = null;
   renderResultSurface();
   refreshActionAvailability();
 }
@@ -289,6 +317,7 @@ function switchMode(mode) {
   updateInputPreviewAndQueue();
   renderResultSurface();
   refreshActionAvailability();
+  persistUserPreferences();
 }
 
 function copyCurrentTags() {
@@ -364,13 +393,19 @@ async function runAnalysis() {
 
   try {
     if (state.mode === MODES.single) {
+      const previousTags = uniqueTags(
+        safeArray(state.previousSingleTags.length ? state.previousSingleTags : state.singleResult?.tags)
+      );
       const payload = await detectSingle(state.selectedFile, state.config, controller.signal);
       state.singleResult = payload;
+      state.tagDelta = computeTagDelta(previousTags, payload.tags);
+      state.previousSingleTags = uniqueTags(safeArray(payload.tags));
       pushSingleHistory(payload);
       setStatus("Análise concluída com sucesso.", STATUS_VARIANT.success);
     } else {
       const payload = await detectBatch(state.batchFiles, state.config, controller.signal);
       state.batchResult = payload;
+      state.tagDelta = null;
       pushBatchHistory(payload);
       setStatus("Análise em lote concluída.", STATUS_VARIANT.success);
     }
@@ -404,6 +439,7 @@ function updateConfigFromForm() {
 
   syncConfigUI();
   renderResultSurface();
+  persistUserPreferences();
 }
 
 function bindDropzoneEvents() {
@@ -435,9 +471,88 @@ function bindDropzoneEvents() {
   });
 }
 
+function applyPreset(presetKey) {
+  const preset = CONFIG_PRESETS[presetKey];
+  if (!preset) {
+    return;
+  }
+
+  state.config = {
+    ...state.config,
+    conf: preset.conf,
+    maxTags: preset.maxTags,
+    minAreaPercent: preset.minAreaPercent,
+    includePerson: preset.includePerson,
+  };
+
+  syncConfigUI();
+  renderResultSurface();
+  persistUserPreferences();
+  setStatus(`Preset aplicado: ${preset.label}.`, STATUS_VARIANT.neutral);
+}
+
+function isTypingContext(target) {
+  if (!target || !(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  const tag = target.tagName.toLowerCase();
+  return tag === "input" || tag === "textarea" || tag === "select";
+}
+
+function bindGlobalShortcuts() {
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      ui.closeShortcuts();
+      return;
+    }
+
+    if (!event.ctrlKey && event.key === "?") {
+      event.preventDefault();
+      ui.openShortcuts();
+      return;
+    }
+
+    const typing = isTypingContext(event.target);
+
+    if (event.ctrlKey && event.key === "Enter") {
+      event.preventDefault();
+      runAnalysis();
+      return;
+    }
+
+    if (event.ctrlKey && (event.key === "k" || event.key === "K")) {
+      event.preventDefault();
+      ui.focusHistorySearch();
+      return;
+    }
+
+    if (event.ctrlKey && (event.key === "b" || event.key === "B")) {
+      event.preventDefault();
+      const nextMode = state.mode === MODES.single ? MODES.batch : MODES.single;
+      switchMode(nextMode);
+      return;
+    }
+
+    if (typing) {
+      return;
+    }
+  });
+}
+
 function bindEvents() {
   ui.dom.modeSingleBtn.addEventListener("click", () => switchMode(MODES.single));
   ui.dom.modeBatchBtn.addEventListener("click", () => switchMode(MODES.batch));
+
+  ui.dom.presetButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      applyPreset(button.dataset.preset);
+    });
+  });
 
   ui.dom.fileInput.addEventListener("change", (event) => {
     assignFiles(event.target.files);
@@ -453,6 +568,8 @@ function bindEvents() {
   ui.dom.copyTagsBtn.addEventListener("click", copyCurrentTags);
   ui.dom.downloadBtn.addEventListener("click", exportCurrentReport);
   ui.dom.clearBtn.addEventListener("click", clearAll);
+  ui.dom.openShortcutsBtn.addEventListener("click", ui.openShortcuts);
+  ui.dom.closeShortcutsBtn.addEventListener("click", ui.closeShortcuts);
 
   ui.dom.historySearch.addEventListener("input", (event) => {
     state.historyQuery = event.target.value || "";
@@ -467,6 +584,7 @@ function bindEvents() {
   });
 
   bindDropzoneEvents();
+  bindGlobalShortcuts();
 }
 
 function init() {

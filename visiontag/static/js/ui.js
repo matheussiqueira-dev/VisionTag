@@ -5,6 +5,7 @@ const dom = {
   modeSingleBtn: document.getElementById("modeSingleBtn"),
   modeBatchBtn: document.getElementById("modeBatchBtn"),
   modeHint: document.getElementById("modeHint"),
+  presetButtons: Array.from(document.querySelectorAll(".preset-btn")),
   dropzone: document.getElementById("dropzone"),
   fileInput: document.getElementById("fileInput"),
   dropzoneTitle: document.getElementById("dropzoneTitle"),
@@ -33,12 +34,17 @@ const dom = {
   metricUnique: document.getElementById("metricUnique"),
 
   tagsWrap: document.getElementById("tagsWrap"),
+  tagDeltaWrap: document.getElementById("tagDeltaWrap"),
   detectionsBody: document.getElementById("detectionsBody"),
   batchResults: document.getElementById("batchResults"),
 
   historySearch: document.getElementById("historySearch"),
   historyList: document.getElementById("historyList"),
   clearHistoryBtn: document.getElementById("clearHistoryBtn"),
+
+  openShortcutsBtn: document.getElementById("openShortcutsBtn"),
+  closeShortcutsBtn: document.getElementById("closeShortcutsBtn"),
+  shortcutsDialog: document.getElementById("shortcutsDialog"),
 };
 
 function setText(element, value) {
@@ -177,6 +183,67 @@ function renderDetections(detections, minConfidencePercent) {
   });
 
   dom.detectionsBody.appendChild(fragment);
+}
+
+function createDeltaCard({ title, className, tags, emptyMessage }) {
+  const card = document.createElement("article");
+  card.className = `delta-card ${className}`;
+
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  card.appendChild(heading);
+
+  const list = document.createElement("ul");
+  if (!tags.length) {
+    const li = document.createElement("li");
+    li.textContent = emptyMessage;
+    list.appendChild(li);
+  } else {
+    tags.slice(0, 8).forEach((tag) => {
+      const li = document.createElement("li");
+      li.textContent = tag;
+      list.appendChild(li);
+    });
+  }
+
+  card.appendChild(list);
+  return card;
+}
+
+function renderTagDelta(delta) {
+  clearElement(dom.tagDeltaWrap);
+
+  if (!delta) {
+    dom.tagDeltaWrap.className = "delta-empty";
+    dom.tagDeltaWrap.textContent = "Sem comparação disponível.";
+    return;
+  }
+
+  dom.tagDeltaWrap.className = "delta-grid";
+  dom.tagDeltaWrap.appendChild(
+    createDeltaCard({
+      title: "Novas tags",
+      className: "delta-card--added",
+      tags: safeArray(delta.added),
+      emptyMessage: "Nenhuma tag nova",
+    })
+  );
+  dom.tagDeltaWrap.appendChild(
+    createDeltaCard({
+      title: "Removidas",
+      className: "delta-card--removed",
+      tags: safeArray(delta.removed),
+      emptyMessage: "Nenhuma tag removida",
+    })
+  );
+  dom.tagDeltaWrap.appendChild(
+    createDeltaCard({
+      title: "Mantidas",
+      className: "delta-card--kept",
+      tags: safeArray(delta.kept),
+      emptyMessage: "Sem recorrência",
+    })
+  );
 }
 
 function makeBatchCard(item) {
@@ -339,6 +406,22 @@ function setActionAvailability({ canExport, canCopy }) {
   dom.copyTagsBtn.disabled = !canCopy;
 }
 
+function focusHistorySearch() {
+  dom.historySearch.focus();
+}
+
+function openShortcuts() {
+  if (dom.shortcutsDialog && typeof dom.shortcutsDialog.showModal === "function") {
+    dom.shortcutsDialog.showModal();
+  }
+}
+
+function closeShortcuts() {
+  if (dom.shortcutsDialog && typeof dom.shortcutsDialog.close === "function" && dom.shortcutsDialog.open) {
+    dom.shortcutsDialog.close();
+  }
+}
+
 export const ui = {
   dom,
   setMode,
@@ -350,7 +433,11 @@ export const ui = {
   renderSinglePreview,
   renderFileQueue,
   renderTags,
+  renderTagDelta,
   renderDetections,
   renderBatchResults,
   renderHistory,
+  focusHistorySearch,
+  openShortcuts,
+  closeShortcuts,
 };

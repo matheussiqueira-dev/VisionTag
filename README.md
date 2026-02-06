@@ -7,7 +7,8 @@ A interface foi reestruturada para suportar fluxo real de uso com:
 - filtros avançados de inferência,
 - histórico local pesquisável,
 - exportação de relatório,
-- arquitetura frontend modular.
+- arquitetura frontend modular,
+- persistência de preferências e atalhos de produtividade.
 
 ## Visão Geral do Frontend
 
@@ -49,7 +50,7 @@ Responsabilidades por módulo:
 - `app.js`: orquestra fluxo da aplicação, eventos, estado global e casos de uso.
 - `api.js`: camada de comunicação HTTP com tratamento de erro.
 - `ui.js`: renderização de UI, atualizações de DOM e estado visual.
-- `storage.js`: persistência de histórico no `localStorage`.
+- `storage.js`: persistência de histórico e preferências no `localStorage`.
 - `helpers.js`: utilitários de formatação, transformação e normalização.
 - `constants.js`: contratos e limites do frontend.
 
@@ -62,6 +63,9 @@ Responsabilidades por módulo:
 - Cancelamento de requisição concorrente com `AbortController`.
 - Renderização defensiva com `textContent` e criação de nós DOM para reduzir risco de injeção.
 - Melhorias de UX de feedback (status pill, loading state, mensagens contextualizadas).
+- Persistência de preferências do usuário (modo e parâmetros).
+- Atalhos globais para acelerar fluxos operacionais.
+- Comparativo entre análises com delta de tags.
 
 ## UI/UX e Design System
 
@@ -90,14 +94,21 @@ Responsabilidades por módulo:
   - área mínima,
   - inclusão de pessoa.
 - Filtro visual de confiança pós-processamento.
+- Presets de inferência (balanceado, alta precisão e sensível).
 - Resultado detalhado:
   - tags,
+  - delta entre análise anterior e atual,
   - tabela de detecções,
   - métricas operacionais.
 - Visão de resultado por arquivo em análise de lote.
 - Busca e limpeza de histórico local.
 - Exportação de relatório JSON.
 - Cópia rápida de tags para clipboard.
+- Atalhos de teclado:
+  - `Ctrl + Enter` para analisar
+  - `Ctrl + K` para buscar no histórico
+  - `Ctrl + B` para alternar modo
+  - `?` para abrir a ajuda de atalhos
 
 ## Setup e Execução
 

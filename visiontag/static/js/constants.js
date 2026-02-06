@@ -9,6 +9,7 @@ export const MODES = {
 };
 
 export const HISTORY_KEY = "visiontag:history:v2";
+export const PREFERENCES_KEY = "visiontag:preferences:v1";
 export const MAX_HISTORY_ITEMS = 20;
 export const MAX_BATCH_FILES = 12;
 
@@ -25,4 +26,28 @@ export const DEFAULT_CONFIG = {
   minAreaPercent: 1,
   includePerson: false,
   visualFilterPercent: 0,
+};
+
+export const CONFIG_PRESETS = {
+  balanced: {
+    label: "Balanceado",
+    conf: 0.7,
+    maxTags: 5,
+    minAreaPercent: 1,
+    includePerson: false,
+  },
+  highPrecision: {
+    label: "Alta precisão",
+    conf: 0.82,
+    maxTags: 4,
+    minAreaPercent: 2.2,
+    includePerson: false,
+  },
+  sensitivity: {
+    label: "Sensível",
+    conf: 0.55,
+    maxTags: 10,
+    minAreaPercent: 0.5,
+    includePerson: true,
+  },
 };

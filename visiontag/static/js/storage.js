@@ -1,4 +1,4 @@
-import { HISTORY_KEY, MAX_HISTORY_ITEMS } from "./constants.js";
+import { HISTORY_KEY, MAX_HISTORY_ITEMS, PREFERENCES_KEY } from "./constants.js";
 
 export function loadHistory() {
   try {
@@ -31,4 +31,25 @@ export function pushHistoryItem(history, entry) {
 
 export function clearHistory() {
   window.localStorage.removeItem(HISTORY_KEY);
+}
+
+export function loadPreferences() {
+  try {
+    const raw = window.localStorage.getItem(PREFERENCES_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePreferences(preferences) {
+  if (!preferences || typeof preferences !== "object") {
+    return;
+  }
+  window.localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
 }
