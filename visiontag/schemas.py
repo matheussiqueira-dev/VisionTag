@@ -113,3 +113,18 @@ class RecentDetectionEntry(BaseModel):
 class RecentDetectionResponse(BaseModel):
     total: int = Field(..., ge=0)
     items: List[RecentDetectionEntry]
+
+
+class RecentSummary(BaseModel):
+    window_size: int = Field(..., ge=0)
+    cache_hit_ratio: float = Field(..., ge=0, le=1)
+    sources: Dict[str, int]
+    top_tags: Dict[str, int]
+
+
+class AdminOverviewResponse(BaseModel):
+    metrics: TelemetryResponse
+    runtime: RuntimeSettingsResponse
+    cache_items: int = Field(..., ge=0)
+    recent: RecentSummary
+    recent_items: List[RecentDetectionEntry]

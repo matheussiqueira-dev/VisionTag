@@ -43,6 +43,13 @@ def validate_remote_image_url(url: str) -> None:
         raise InvalidInputError("Endereco IP nao permitido por politica de seguranca.")
 
 
+def validate_response_url_chain(response: httpx.Response) -> None:
+    urls = [str(item.request.url) for item in response.history]
+    urls.append(str(response.request.url))
+    for url in urls:
+        validate_remote_image_url(url)
+
+
 async def fetch_remote_image(
     *,
     url: str,
@@ -64,6 +71,17 @@ async def fetch_remote_image(
             raise InvalidInputError(f"Falha ao baixar imagem remota (status {exc.response.status_code}).") from exc
         except httpx.HTTPError as exc:
             raise InvalidInputError("Falha de rede ao acessar URL informada.") from exc
+
+        validate_response_url_chain(response)
+
+        content_length = (response.headers.get("content-length") or "").strip()
+        if content_length:
+            try:
+                declared_size = int(content_length)
+            except ValueError:
+                raise InvalidInputError("Content-Length invalido na resposta remota.")
+            if declared_size > max_bytes:
+                raise PayloadTooLargeError("Imagem remota excede o limite permitido.")
 
         content_type = (response.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
         if not is_allowed_content_type(content_type):

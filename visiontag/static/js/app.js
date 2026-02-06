@@ -1,4 +1,4 @@
-import { detectBatch, detectByUrl, detectSingle, fetchOperationalMetrics } from "./api.js";
+import { clearOperationalCache, detectBatch, detectByUrl, detectSingle, fetchOperationalOverview } from "./api.js";
 import {
   CONFIG_PRESETS,
   DEFAULT_CONFIG,
@@ -43,7 +43,7 @@ const state = {
   previewUrl: null,
   singleResult: null,
   batchResult: null,
-  operationalMetrics: null,
+  operationalOverview: null,
   tagDelta: null,
   previousSingleTags: [],
   history: loadHistory(),
@@ -445,16 +445,33 @@ function clearAll() {
   setStatus("Interface limpa e pronta para nova análise.", STATUS_VARIANT.neutral);
 }
 
-async function loadMetrics() {
+async function loadOperationalOverview() {
   const controller = new AbortController();
   try {
-    setStatus("Consultando métricas operacionais...", STATUS_VARIANT.loading);
-    const payload = await fetchOperationalMetrics(state.config, controller.signal);
-    state.operationalMetrics = payload;
-    ui.renderOperationalMetrics(payload);
-    setStatus("Métricas atualizadas.", STATUS_VARIANT.success);
+    setStatus("Consultando painel operacional...", STATUS_VARIANT.loading);
+    const payload = await fetchOperationalOverview(state.config, controller.signal);
+    state.operationalOverview = payload;
+    ui.renderOperationalOverview(payload);
+    setStatus("Painel operacional atualizado.", STATUS_VARIANT.success);
   } catch (error) {
-    setStatus(error?.message || "Falha ao carregar métricas.", STATUS_VARIANT.error);
+    setStatus(error?.message || "Falha ao carregar painel operacional.", STATUS_VARIANT.error);
+  }
+}
+
+async function clearOperationalCacheData() {
+  const confirmed = window.confirm("Deseja limpar o cache de inferência agora?");
+  if (!confirmed) {
+    return;
+  }
+
+  const controller = new AbortController();
+  try {
+    setStatus("Limpando cache de inferência...", STATUS_VARIANT.loading);
+    const payload = await clearOperationalCache(state.config, controller.signal);
+    setStatus(`Cache limpo com sucesso (${payload.removed_items} itens).`, STATUS_VARIANT.success);
+    await loadOperationalOverview();
+  } catch (error) {
+    setStatus(error?.message || "Falha ao limpar cache.", STATUS_VARIANT.error);
   }
 }
 
@@ -604,7 +621,8 @@ function bindEvents() {
   ui.dom.clearBtn.addEventListener("click", clearAll);
   ui.dom.openShortcutsBtn.addEventListener("click", ui.openShortcuts);
   ui.dom.closeShortcutsBtn.addEventListener("click", ui.closeShortcuts);
-  ui.dom.refreshMetricsBtn.addEventListener("click", loadMetrics);
+  ui.dom.refreshMetricsBtn.addEventListener("click", loadOperationalOverview);
+  ui.dom.clearCacheBtn.addEventListener("click", clearOperationalCacheData);
 
   ui.dom.historySearch.addEventListener("input", (event) => {
     state.historyQuery = event.target.value || "";
@@ -627,11 +645,12 @@ function init() {
   syncConfigUI();
   updateInputPreviewAndQueue();
   renderResultSurface();
-  ui.renderOperationalMetrics(state.operationalMetrics);
+  ui.renderOperationalOverview(state.operationalOverview);
   renderHistory();
   refreshActionAvailability();
   setStatus("Selecione uma imagem para iniciar a análise.", STATUS_VARIANT.neutral);
   bindEvents();
+  loadOperationalOverview();
 }
 
 init();

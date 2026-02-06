@@ -18,7 +18,15 @@ from ..utils import decode_image, sanitize_filename, tag_frequency
 
 
 class SupportsDetectionService(Protocol):
-    def detect_from_bytes(self, payload: bytes, options: DetectionOptions) -> DetectionResult:
+    def detect_from_bytes(
+        self,
+        payload: bytes,
+        options: DetectionOptions,
+        *,
+        source: str = "upload",
+        principal_id: str = "unknown",
+        request_id: str = "n/a",
+    ) -> DetectionResult:
         ...
 
     def detect_batch(self, files: Sequence[Tuple[str, bytes]], options: DetectionOptions) -> BatchDetectResponse:

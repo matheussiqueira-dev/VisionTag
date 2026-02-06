@@ -46,7 +46,10 @@ const dom = {
   historyList: document.getElementById("historyList"),
   clearHistoryBtn: document.getElementById("clearHistoryBtn"),
   refreshMetricsBtn: document.getElementById("refreshMetricsBtn"),
+  clearCacheBtn: document.getElementById("clearCacheBtn"),
   metricsPanel: document.getElementById("metricsPanel"),
+  runtimePanel: document.getElementById("runtimePanel"),
+  recentPanel: document.getElementById("recentPanel"),
 
   openShortcutsBtn: document.getElementById("openShortcutsBtn"),
   closeShortcutsBtn: document.getElementById("closeShortcutsBtn"),
@@ -415,25 +418,15 @@ function setActionAvailability({ canExport, canCopy }) {
   dom.copyTagsBtn.disabled = !canCopy;
 }
 
-function renderOperationalMetrics(metrics) {
-  clearElement(dom.metricsPanel);
-
-  if (!metrics) {
-    dom.metricsPanel.className = "ops-panel-empty";
-    dom.metricsPanel.textContent = "Métricas ainda não carregadas.";
+function renderOpsFieldPanel(panel, fields, emptyMessage) {
+  clearElement(panel);
+  if (!fields || !fields.length) {
+    panel.className = "ops-panel-empty";
+    panel.textContent = emptyMessage;
     return;
   }
 
-  dom.metricsPanel.className = "ops-panel-grid";
-  const fields = [
-    ["Requests", metrics.requests_total],
-    ["Erros", metrics.errors_total],
-    ["Detecções", metrics.detections_total],
-    ["Cache hits", metrics.cache_hits],
-    ["Latência média", `${metrics.average_latency_ms} ms`],
-    ["Uptime", `${metrics.uptime_seconds}s`],
-  ];
-
+  panel.className = "ops-panel-grid";
   const fragment = document.createDocumentFragment();
   fields.forEach(([label, value]) => {
     const item = document.createElement("article");
@@ -442,14 +435,134 @@ function renderOperationalMetrics(metrics) {
     const name = document.createElement("span");
     name.textContent = String(label);
     const amount = document.createElement("strong");
-    amount.textContent = String(value);
+    amount.textContent = value === undefined || value === null ? "-" : String(value);
 
     item.appendChild(name);
     item.appendChild(amount);
     fragment.appendChild(item);
   });
+  panel.appendChild(fragment);
+}
 
-  dom.metricsPanel.appendChild(fragment);
+function renderRecentPanel(recentSummary, recentItems) {
+  clearElement(dom.recentPanel);
+
+  if (!recentSummary && (!recentItems || !recentItems.length)) {
+    dom.recentPanel.className = "ops-panel-empty";
+    dom.recentPanel.textContent = "Sem dados recentes.";
+    return;
+  }
+
+  dom.recentPanel.className = "recent-panel-list";
+
+  const summary = document.createElement("article");
+  summary.className = "recent-item";
+
+  const summaryTitle = document.createElement("strong");
+  summaryTitle.textContent = "Resumo da janela recente";
+  summary.appendChild(summaryTitle);
+
+  const summaryMeta = document.createElement("p");
+  summaryMeta.className = "recent-meta";
+  const hitRatioPercent = Number(recentSummary?.cache_hit_ratio || 0) * 100;
+  summaryMeta.textContent = `${recentSummary?.window_size || 0} análises • cache hit ${hitRatioPercent.toFixed(1)}%`;
+  summary.appendChild(summaryMeta);
+
+  const sourceWrap = document.createElement("div");
+  sourceWrap.className = "recent-tags";
+  const sources = recentSummary?.sources || {};
+  if (Object.keys(sources).length === 0) {
+    const emptySource = document.createElement("span");
+    emptySource.textContent = "Sem fontes";
+    sourceWrap.appendChild(emptySource);
+  } else {
+    Object.entries(sources).forEach(([source, count]) => {
+      const chip = document.createElement("span");
+      chip.textContent = `${source}: ${count}`;
+      sourceWrap.appendChild(chip);
+    });
+  }
+  summary.appendChild(sourceWrap);
+  dom.recentPanel.appendChild(summary);
+
+  safeArray(recentItems)
+    .slice(0, 6)
+    .forEach((entry) => {
+      const item = document.createElement("article");
+      item.className = "recent-item";
+
+      const title = document.createElement("strong");
+      title.textContent = `${entry.source} • ${entry.total_detections} detecções`;
+      item.appendChild(title);
+
+      const meta = document.createElement("p");
+      meta.className = "recent-meta";
+      meta.textContent = `${entry.timestamp} • ${entry.inference_ms} ms • principal ${entry.principal_id}`;
+      item.appendChild(meta);
+
+      const tags = document.createElement("div");
+      tags.className = "recent-tags";
+      safeArray(entry.tags)
+        .slice(0, 6)
+        .forEach((tag) => {
+          const chip = document.createElement("span");
+          chip.textContent = tag;
+          tags.appendChild(chip);
+        });
+      item.appendChild(tags);
+      dom.recentPanel.appendChild(item);
+    });
+}
+
+function renderOperationalOverview(overview) {
+  if (!overview) {
+    renderOpsFieldPanel(dom.metricsPanel, null, "Painel ainda não carregado.");
+    renderOpsFieldPanel(dom.runtimePanel, null, "Sem dados de runtime.");
+    renderRecentPanel(null, []);
+    return;
+  }
+
+  const metrics = overview.metrics || {};
+  const recent = overview.recent || {};
+  const topTags = recent.top_tags || {};
+  const topTagsText = Object.keys(topTags).length
+    ? Object.entries(topTags)
+        .map(([tag, count]) => `${tag} (${count})`)
+        .join(", ")
+    : "Sem tags recentes";
+
+  renderOpsFieldPanel(
+    dom.metricsPanel,
+    [
+      ["Requests", metrics.requests_total],
+      ["Erros", metrics.errors_total],
+      ["Detecções", metrics.detections_total],
+      ["Cache hits", metrics.cache_hits],
+      ["Cache itens", overview.cache_items],
+      ["Latência média", `${metrics.average_latency_ms} ms`],
+      ["Uptime", `${metrics.uptime_seconds}s`],
+      ["Top tags", topTagsText],
+    ],
+    "Painel ainda não carregado."
+  );
+
+  const runtime = overview.runtime || {};
+  renderOpsFieldPanel(
+    dom.runtimePanel,
+    [
+      ["Versão", runtime.app_version],
+      ["Auth", runtime.auth_required ? "Obrigatória" : "Opcional"],
+      ["Rate limit", `${runtime.rate_limit_per_minute}/min`],
+      ["Upload máx", `${runtime.max_upload_mb} MB`],
+      ["Batch máx", runtime.max_batch_files],
+      ["Concorrência", runtime.max_concurrent_inference],
+      ["TTL cache", `${runtime.cache_ttl_seconds}s`],
+      ["GZip", runtime.enable_gzip ? "Ativo" : "Inativo"],
+    ],
+    "Sem dados de runtime."
+  );
+
+  renderRecentPanel(recent, overview.recent_items);
 }
 
 function focusHistorySearch() {
@@ -486,5 +599,5 @@ export const ui = {
   focusHistorySearch,
   openShortcuts,
   closeShortcuts,
-  renderOperationalMetrics,
+  renderOperationalOverview,
 };

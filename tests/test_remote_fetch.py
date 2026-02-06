@@ -1,4 +1,8 @@
-from visiontag.remote_fetch import validate_remote_image_url
+import httpx
+import pytest
+
+from visiontag.errors import InvalidInputError
+from visiontag.remote_fetch import validate_remote_image_url, validate_response_url_chain
 
 
 def test_validate_remote_image_url_accepts_public_https():
@@ -6,18 +10,24 @@ def test_validate_remote_image_url_accepts_public_https():
 
 
 def test_validate_remote_image_url_rejects_localhost():
-    try:
+    with pytest.raises(InvalidInputError):
         validate_remote_image_url("http://localhost/image.png")
-    except Exception as exc:
-        assert exc.__class__.__name__ == "InvalidInputError"
-    else:
-        raise AssertionError("expected invalid input error")
 
 
 def test_validate_remote_image_url_rejects_private_ip():
-    try:
+    with pytest.raises(InvalidInputError):
         validate_remote_image_url("http://192.168.0.10/image.png")
-    except Exception as exc:
-        assert exc.__class__.__name__ == "InvalidInputError"
-    else:
-        raise AssertionError("expected invalid input error")
+
+
+def test_validate_response_url_chain_rejects_unsafe_redirect():
+    first_request = httpx.Request("GET", "https://example.com/image.png")
+    redirect_response = httpx.Response(
+        status_code=302,
+        headers={"location": "http://localhost/image.png"},
+        request=first_request,
+    )
+    final_request = httpx.Request("GET", "http://localhost/image.png")
+    final_response = httpx.Response(status_code=200, request=final_request, history=[redirect_response])
+
+    with pytest.raises(InvalidInputError):
+        validate_response_url_chain(final_response)

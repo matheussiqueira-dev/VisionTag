@@ -85,7 +85,7 @@
 
           <ul id="fileQueue" class="file-queue" aria-label="Arquivos selecionados"></ul>
 
-          <label class="field-label" for="imageUrl">Ou analyze por URL (modo imagem única)</label>
+          <label class="field-label" for="imageUrl">Ou analise por URL (modo imagem única)</label>
           <input id="imageUrl" type="url" placeholder="https://exemplo.com/imagem.jpg" />
         </article>
 
@@ -224,10 +224,27 @@
         <article class="card section-card reveal">
           <div class="header-inline">
             <h3>Painel Operacional</h3>
-            <button type="button" id="refreshMetricsBtn" class="btn btn-tiny">Atualizar métricas</button>
+            <div class="ops-actions">
+              <button type="button" id="refreshMetricsBtn" class="btn btn-tiny">Atualizar painel</button>
+              <button type="button" id="clearCacheBtn" class="btn btn-tiny">Limpar cache</button>
+            </div>
           </div>
           <p class="help-text">Requer escopo <code>admin</code> quando autenticação estiver habilitada.</p>
-          <div id="metricsPanel" class="ops-panel-empty">Métricas ainda não carregadas.</div>
+
+          <section>
+            <h4>Resumo Operacional</h4>
+            <div id="metricsPanel" class="ops-panel-empty">Painel ainda não carregado.</div>
+          </section>
+
+          <section>
+            <h4>Configuração Runtime</h4>
+            <div id="runtimePanel" class="ops-panel-empty">Sem dados de runtime.</div>
+          </section>
+
+          <section>
+            <h4>Atividade Recente</h4>
+            <div id="recentPanel" class="ops-panel-empty">Sem dados recentes.</div>
+          </section>
         </article>
       </section>
     </section>

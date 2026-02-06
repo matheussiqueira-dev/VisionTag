@@ -119,10 +119,27 @@ export async function detectByUrl(imageUrl, config, signal) {
   return payload;
 }
 
-export async function fetchOperationalMetrics(config, signal) {
+export async function fetchOperationalOverview(config, signal, recentLimit = 30) {
+  const params = new URLSearchParams();
+  params.set("recent_limit", String(recentLimit));
   const headers = buildAuthHeaders(config);
-  const response = await fetch(API_ROUTES.metrics, {
+  const response = await fetch(`${API_ROUTES.adminOverview}?${params.toString()}`, {
     method: "GET",
+    headers,
+    signal,
+  });
+
+  const payload = await parseJsonResponse(response);
+  if (!response.ok) {
+    throw new Error(parseResponseError(payload));
+  }
+  return payload;
+}
+
+export async function clearOperationalCache(config, signal) {
+  const headers = buildAuthHeaders(config);
+  const response = await fetch(API_ROUTES.adminCache, {
+    method: "DELETE",
     headers,
     signal,
   });

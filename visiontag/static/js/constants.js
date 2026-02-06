@@ -3,6 +3,8 @@ export const API_ROUTES = {
   detectBatch: "/api/v1/detect/batch",
   detectUrl: "/api/v1/detect/url",
   metrics: "/api/v1/metrics",
+  adminOverview: "/api/v1/admin/overview",
+  adminCache: "/api/v1/admin/cache",
 };
 
 export const MODES = {

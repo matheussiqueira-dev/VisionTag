@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 from collections import deque
 from dataclasses import dataclass
 from threading import Lock
@@ -47,9 +46,9 @@ class AuthService:
             return ApiPrincipal(key_id="anonymous", scopes={"detect"})
 
         incoming = self._digest(token)
-        for expected_digest, principal in self._keys.items():
-            if hmac.compare_digest(incoming, expected_digest):
-                return principal
+        principal = self._keys.get(incoming)
+        if principal is not None:
+            return principal
 
         raise AuthenticationError("Chave de API invalida.")
 

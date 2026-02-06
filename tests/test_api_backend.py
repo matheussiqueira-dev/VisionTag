@@ -127,3 +127,43 @@ def test_detect_url_endpoint_returns_contract(monkeypatch):
     payload = response.json()
     assert payload["tags"] == ["mesa"]
     assert payload["cached"] is False
+
+
+def test_admin_overview_returns_contract():
+    provider = FakeProvider()
+    provider._cache_items = 7
+    app.state.detection_service_provider = provider
+    app.state.telemetry.record_analysis(
+        source="upload",
+        principal_id="tester",
+        request_id="req-1",
+        tags=["mesa", "cadeira"],
+        total_detections=2,
+        inference_ms=12.5,
+        cached=False,
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/admin/overview", headers={"X-API-Key": app.state.settings.default_api_key})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["cache_items"] == 7
+    assert "metrics" in payload
+    assert "runtime" in payload
+    assert payload["recent"]["window_size"] >= 1
+    assert "sources" in payload["recent"]
+    assert isinstance(payload["recent_items"], list)
+
+
+def test_admin_cache_clear_returns_removed_items():
+    provider = FakeProvider()
+    provider._cache_items = 4
+    app.state.detection_service_provider = provider
+
+    with TestClient(app) as client:
+        response = client.delete("/api/v1/admin/cache", headers={"X-API-Key": app.state.settings.default_api_key})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["removed_items"] == 4
