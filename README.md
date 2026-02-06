@@ -1,119 +1,95 @@
-# VisionTag
+# VisionTag Frontend
 
-VisionTag é uma plataforma fullstack de detecção visual com foco em qualidade de engenharia, segurança operacional e experiência de uso. O projeto combina API versionada com interface web moderna para análise de imagem única, lote e URL remota.
+Frontend profissional para análise de imagens com foco em usabilidade, acessibilidade, performance e operação em tempo real. A interface consome a API do VisionTag para detecção visual e oferece fluxo completo para modo único, lote e URL remota.
 
-## Visão Geral
+## Visão Geral do Frontend
 
-### Propósito
-Transformar imagens em dados acionáveis (tags e detecções) para fluxos de produto, operação, moderação e automação.
+O frontend do VisionTag foi projetado para equipes que precisam de produtividade operacional sem abrir mão de qualidade visual.
 
-### Público-alvo
-- Times de produto e operações que precisam de classificação visual rápida.
-- Equipes de engenharia que desejam API robusta com frontend pronto para uso.
-- Cenários de validação técnica e prototipação com YOLOv8.
+Objetivos principais:
+- reduzir tempo de análise visual;
+- melhorar previsibilidade dos fluxos de detecção;
+- entregar feedback claro de status, resultados e saúde operacional.
 
-### Fluxo principal
-1. Usuário envia imagem local, lote ou URL remota.
-2. Backend valida entrada (tipo, tamanho e políticas de segurança).
-3. Inferência executa com filtros configuráveis.
-4. API retorna contrato estruturado com detecções e métricas.
-5. Frontend apresenta resultado, histórico local e painel operacional.
+Público-alvo:
+- analistas de operação;
+- squads de produto e engenharia;
+- times que validam modelos de visão computacional em ambiente real.
 
-## Arquitetura e Decisões Técnicas
+## Stack e Tecnologias Utilizadas
 
-Arquitetura adotada: **monólito modular** com separação clara por responsabilidades.
-
-- `visiontag/api.py`: camada HTTP, contratos, middlewares e endpoints versionados.
-- `visiontag/services/detection_service.py`: orquestração de detecção, cache e telemetria.
-- `visiontag/detector.py`: domínio de inferência YOLO e regras de filtragem.
-- `visiontag/security.py`: autenticação, autorização por escopo e rate limiting.
-- `visiontag/remote_fetch.py`: fetch remoto seguro com proteção SSRF.
-- `visiontag/telemetry.py`: métricas operacionais e trilha recente de análises.
-- `visiontag/static/*`: frontend modular (estado, API client, renderização e UX).
-
-Decisões-chave implementadas:
-- Inferência síncrona movida para `asyncio.to_thread` no backend para evitar bloqueio do event loop.
-- Processamento de lote com concorrência controlada por semáforo (`max_concurrent_inference`).
-- Endpoint consolidado `GET /api/v1/admin/overview` para dashboard operacional completo.
-- Cache de inferência com TTL e limite de itens.
-- Segurança por API key + escopos (`detect`, `admin`) e rate limit por janela deslizante.
-
-## Tecnologias Utilizadas
-
-### Backend
-- Python 3.10+
-- FastAPI
-- Pydantic v2
-- Uvicorn
-- Ultralytics YOLOv8
-- OpenCV
-- NumPy
-- httpx
-
-### Frontend
 - HTML5 semântico
-- CSS3 com design tokens e estados reutilizáveis
-- JavaScript ES Modules
-
-### Qualidade
-- Pytest
+- CSS3 com design tokens e componentes reutilizáveis
+- JavaScript ES Modules (arquitetura modular sem framework)
+- Integração com API REST (`/api/v1/*`)
+- Persistência local com `localStorage`
 
 ## Funcionalidades Principais
 
-### API
-- `POST /api/v1/detect` (imagem única)
-- `POST /api/v1/detect/batch` (lote)
-- `POST /api/v1/detect/url` (imagem por URL)
-- `GET /api/v1/health`
-- `GET /api/v1/labels`
-- `GET /api/v1/metrics` (admin)
-- `GET /api/v1/admin/runtime` (admin)
-- `GET /api/v1/admin/recent` (admin)
-- `GET /api/v1/admin/overview` (admin, consolidado)
-- `GET /api/v1/admin/cache` (admin)
-- `DELETE /api/v1/admin/cache` (admin)
-- `POST /detect` (compatibilidade legada)
+- Upload de imagem única e lote
+- Análise por URL remota
+- Parâmetros avançados de inferência (confiança, área mínima, include/exclude labels)
+- Presets rápidos e presets personalizados persistidos localmente
+- Histórico local com busca
+- Exportação de relatório JSON
+- Painel operacional (overview admin, runtime, atividade recente e limpeza de cache)
+- Atalhos de teclado para fluxo rápido
+- Controles de acessibilidade:
+  - alto contraste
+  - modo compacto
+- Insights visuais de detecção (KPIs + distribuição por label)
 
-### Frontend
-- Modo imagem única e lote.
-- Análise por URL remota.
-- Presets de inferência.
-- Filtros de labels (`include_labels` e `exclude_labels`).
-- Histórico local pesquisável e exportação JSON.
-- Painel operacional com visão consolidada:
-  - métricas,
-  - runtime,
-  - atividade recente,
-  - limpeza de cache via UI.
-- Atalhos de teclado e feedback visual de status.
+## Arquitetura Frontend
 
-## Segurança, Performance e Escalabilidade
+Estrutura modular:
 
-### Segurança
-- Autenticação por `X-API-Key` ou `Authorization: Bearer`.
-- Autorização por escopos.
-- Rate limit por identidade.
-- Validação rígida de upload.
-- Proteção contra SSRF no fetch remoto (incluindo cadeia de redirecionamentos).
-- Headers de segurança e CSP.
+```text
+visiontag/static/
+  index.html
+  styles.css
+  js/
+    app.js        # estado, orquestração e eventos
+    ui.js         # renderização e manipulação de DOM
+    api.js        # cliente HTTP da API
+    storage.js    # persistência local
+    helpers.js    # utilitários puros (formatação, insights, debounce)
+    constants.js  # constantes e chaves da aplicação
+```
 
-### Performance
-- Inferência executada fora do loop assíncrono (`to_thread`).
-- Lote processado em paralelo com limite configurável.
-- Cache de resultados por hash de payload + opções.
-- Compressão HTTP opcional (`GZipMiddleware`).
+Padrões adotados:
+- separação de responsabilidades por módulo;
+- funções puras para transformação de dados;
+- renderização incremental por estado;
+- persistência de preferências sem armazenar segredos sensíveis (API key não persiste).
 
-### Manutenibilidade
-- Contratos tipados e versionados.
-- Separação por camadas com baixo acoplamento.
-- Testes cobrindo API, segurança, serviço e utilitários.
+## UI/UX e Design System
 
-## Instalação e Uso
+### Diretrizes aplicadas
+- hierarquia visual clara e alta legibilidade;
+- feedback contínuo de estado (loading, sucesso, erro);
+- consistência tipográfica e de espaçamento;
+- componentes reutilizáveis para listas, chips, cards e painéis.
+
+### Tokens visuais
+- paleta semântica com variáveis CSS (`:root`);
+- estados de interação (hover/focus/disabled);
+- modo de alto contraste por atributo `data-contrast`;
+- densidade visual ajustável por `data-density`.
+
+### Acessibilidade (boas práticas WCAG)
+- skip-link para conteúdo principal;
+- foco visível em elementos interativos;
+- áreas com `aria-live` para feedback dinâmico;
+- navegação por teclado e atalhos;
+- suporte a `prefers-reduced-motion`.
+
+## Setup e Execução
 
 ### Pré-requisitos
 - Python 3.10+
+- Backend VisionTag em execução local
 
-### Setup
+### Instalação
 ```bash
 python -m venv .venv
 # Windows
@@ -125,95 +101,48 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-### Executar
+### Rodar aplicação
 ```bash
 uvicorn visiontag.api:app --host 0.0.0.0 --port 8000
 ```
 
-Acessos:
+Acessar:
 - Frontend: `http://localhost:8000/`
-- Docs: `http://localhost:8000/docs`
+- API Docs: `http://localhost:8000/docs`
 
-### Testes
+## Build e Qualidade
+
+Validações executadas no frontend:
+
+```bash
+node --check visiontag/static/js/app.js
+node --check visiontag/static/js/ui.js
+node --check visiontag/static/js/helpers.js
+node --check visiontag/static/js/storage.js
+```
+
+Validação da suíte do projeto:
+
 ```bash
 python -m pytest -q
 ```
 
-## Configuração por Ambiente
-
-- `VISIONTAG_APP_NAME`
-- `VISIONTAG_APP_VERSION`
-- `VISIONTAG_MODEL_PATH`
-- `VISIONTAG_MAX_UPLOAD_MB`
-- `VISIONTAG_MAX_REMOTE_IMAGE_MB`
-- `VISIONTAG_REMOTE_FETCH_TIMEOUT_SECONDS`
-- `VISIONTAG_MAX_DIMENSION`
-- `VISIONTAG_MAX_BATCH_FILES`
-- `VISIONTAG_CACHE_TTL_SECONDS`
-- `VISIONTAG_CACHE_MAX_ITEMS`
-- `VISIONTAG_MAX_CONCURRENT_INFERENCE`
-- `VISIONTAG_AUTH_REQUIRED`
-- `VISIONTAG_DEFAULT_API_KEY`
-- `VISIONTAG_API_KEYS` (ex.: `key1:detect|admin,key2:detect`)
-- `VISIONTAG_RATE_LIMIT_PER_MINUTE`
-- `VISIONTAG_CORS_ORIGINS`
-- `VISIONTAG_ENABLE_GZIP`
-- `VISIONTAG_LOG_LEVEL`
-
-## Estrutura do Projeto
-
-```text
-visiontag/
-  api.py
-  cli.py
-  config.py
-  detector.py
-  errors.py
-  labels_pt.py
-  logging_config.py
-  remote_fetch.py
-  schemas.py
-  security.py
-  telemetry.py
-  utils.py
-  services/
-    detection_service.py
-  static/
-    index.html
-    styles.css
-    js/
-      app.js
-      api.js
-      constants.js
-      helpers.js
-      storage.js
-      ui.js
-tests/
-  test_api_backend.py
-  test_detection_service.py
-  test_remote_fetch.py
-  test_security.py
-  test_utils.py
-README.md
-requirements.txt
-requirements-dev.txt
-```
-
 ## Boas Práticas Adotadas
 
-- SOLID e DRY na organização de responsabilidades.
-- Contratos explícitos de API com validação forte.
-- Tratamento padronizado de erros.
-- Observabilidade com métricas, request ID e trilha recente.
-- Interface acessível, responsiva e orientada a operação.
+- estado centralizado com fluxo previsível;
+- renderização desacoplada do transporte HTTP;
+- persistência local com limites e saneamento;
+- debounce em busca para melhor responsividade;
+- foco em acessibilidade e UX operacional;
+- nomenclatura clara e manutenção simples.
 
-## Possíveis Melhorias Futuras
+## Melhorias Futuras
 
-- Métricas Prometheus/OpenTelemetry nativas.
-- Fila assíncrona para processamento massivo.
-- Persistência de auditoria em banco.
-- Testes e2e de frontend (Playwright).
-- Deploy com autoscaling horizontal e gateway dedicado.
+- testes e2e de interface (Playwright);
+- internacionalização (i18n);
+- gráficos avançados de operação;
+- tema claro/escuro completo com preferências do sistema;
+- PWA para uso offline parcial.
 
 Autoria: Matheus Siqueira  
 Website: https://www.matheussiqueira.dev/

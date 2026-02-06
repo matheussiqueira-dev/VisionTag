@@ -1,4 +1,11 @@
-import { HISTORY_KEY, MAX_HISTORY_ITEMS, PREFERENCES_KEY } from "./constants.js";
+import {
+  CUSTOM_PRESETS_KEY,
+  HISTORY_KEY,
+  MAX_CUSTOM_PRESETS,
+  MAX_HISTORY_ITEMS,
+  PREFERENCES_KEY,
+  UI_SETTINGS_KEY,
+} from "./constants.js";
 
 export function loadHistory() {
   try {
@@ -52,4 +59,47 @@ export function savePreferences(preferences) {
     return;
   }
   window.localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+}
+
+export function loadCustomPresets() {
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_PRESETS_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.slice(0, MAX_CUSTOM_PRESETS).filter((item) => item && typeof item === "object");
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomPresets(presets) {
+  const safePresets = Array.isArray(presets) ? presets.slice(0, MAX_CUSTOM_PRESETS) : [];
+  window.localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(safePresets));
+}
+
+export function loadUiSettings() {
+  try {
+    const raw = window.localStorage.getItem(UI_SETTINGS_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveUiSettings(settings) {
+  if (!settings || typeof settings !== "object") {
+    return;
+  }
+  window.localStorage.setItem(UI_SETTINGS_KEY, JSON.stringify(settings));
 }

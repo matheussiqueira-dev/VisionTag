@@ -6,6 +6,7 @@
   <title>VisionTag Frontend | Detecção de Objetos com UX Profissional</title>
   <meta name="description" content="Frontend profissional do VisionTag para análise visual de imagens com resultados detalhados, histórico e processamento em lote." />
   <meta name="theme-color" content="#16213a" />
+  <meta name="robots" content="index, follow" />
   <meta property="og:title" content="VisionTag Frontend" />
   <meta property="og:description" content="Interface moderna para detecção de objetos com tags em português." />
   <meta property="og:type" content="website" />
@@ -35,6 +36,7 @@
       <a href="/docs" target="_blank" rel="noopener noreferrer">Documentação da API</a>
       <a href="/api/v1/health" target="_blank" rel="noopener noreferrer">Health Check</a>
       <button type="button" id="openShortcutsBtn" class="top-link-btn">Atalhos</button>
+      <button type="button" id="toggleContrastBtn" class="top-link-btn">Contraste</button>
     </nav>
   </header>
 
@@ -134,6 +136,30 @@
           </div>
         </article>
 
+        <article class="card section-card reveal">
+          <h3>Presets personalizados</h3>
+          <p class="help-text">Salve combinações de parâmetros para reutilizar nos próximos fluxos.</p>
+          <div class="custom-preset-create">
+            <label class="sr-only" for="customPresetName">Nome do preset personalizado</label>
+            <input id="customPresetName" type="text" maxlength="36" placeholder="Ex.: Catálogo de produtos" />
+            <button type="button" id="savePresetBtn" class="btn btn-tiny">Salvar preset</button>
+          </div>
+          <ul id="customPresetList" class="custom-preset-list" aria-live="polite"></ul>
+        </article>
+
+        <article class="card section-card reveal">
+          <h3>Acessibilidade e Leitura</h3>
+          <p class="help-text">Ajustes visuais aplicados localmente para sua experiência.</p>
+          <label class="field-check" for="compactMode">
+            <input id="compactMode" type="checkbox" />
+            <span>Modo compacto (menos espaçamento)</span>
+          </label>
+          <label class="field-check" for="highContrastMode">
+            <input id="highContrastMode" type="checkbox" />
+            <span>Alto contraste</span>
+          </label>
+        </article>
+
         <div class="action-row reveal">
           <button type="button" id="analyzeBtn" class="btn btn-primary">Analisar</button>
           <button type="button" id="downloadBtn" class="btn btn-secondary" disabled>Exportar JSON</button>
@@ -199,6 +225,11 @@
               </table>
             </div>
           </section>
+
+          <section>
+            <h4>Insights de detecção</h4>
+            <div id="insightsPanel" class="insights-empty">Insights serão exibidos após a análise.</div>
+          </section>
         </article>
 
         <article class="card section-card reveal">
@@ -259,6 +290,7 @@
       <li><kbd>Ctrl</kbd> + <kbd>Enter</kbd> Executar análise</li>
       <li><kbd>Ctrl</kbd> + <kbd>K</kbd> Focar busca no histórico</li>
       <li><kbd>Ctrl</kbd> + <kbd>B</kbd> Alternar modo lote/imagem</li>
+      <li><kbd>Ctrl</kbd> + <kbd>H</kbd> Alternar alto contraste</li>
       <li><kbd>Esc</kbd> Fechar modal de atalhos</li>
     </ul>
   </dialog>

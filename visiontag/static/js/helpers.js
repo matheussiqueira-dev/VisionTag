@@ -69,3 +69,60 @@ export function computeTagDelta(previousTags, currentTags) {
 
   return { added, removed, kept };
 }
+
+export function debounce(fn, waitMs = 180) {
+  let timeoutId = null;
+  return (...args) => {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
+    timeoutId = window.setTimeout(() => {
+      fn(...args);
+    }, waitMs);
+  };
+}
+
+export function detectionInsights(detections) {
+  const items = safeArray(detections).filter((item) => item && Number.isFinite(Number(item.confidence)));
+  if (!items.length) {
+    return {
+      total: 0,
+      averageConfidence: 0,
+      highestConfidence: 0,
+      uniqueLabels: 0,
+      topLabels: [],
+    };
+  }
+
+  const byLabel = new Map();
+  let confidenceTotal = 0;
+  let highestConfidence = 0;
+  for (const item of items) {
+    const label = String(item.label || "objeto");
+    const confidence = Number(item.confidence) || 0;
+    confidenceTotal += confidence;
+    highestConfidence = Math.max(highestConfidence, confidence);
+    const previous = byLabel.get(label) || { count: 0, maxConfidence: 0 };
+    byLabel.set(label, {
+      count: previous.count + 1,
+      maxConfidence: Math.max(previous.maxConfidence, confidence),
+    });
+  }
+
+  const topLabels = Array.from(byLabel.entries())
+    .map(([label, meta]) => ({
+      label,
+      count: meta.count,
+      maxConfidence: meta.maxConfidence,
+    }))
+    .sort((a, b) => b.count - a.count || b.maxConfidence - a.maxConfidence)
+    .slice(0, 6);
+
+  return {
+    total: items.length,
+    averageConfidence: confidenceTotal / items.length,
+    highestConfidence,
+    uniqueLabels: byLabel.size,
+    topLabels,
+  };
+}

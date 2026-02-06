@@ -6,6 +6,7 @@ const dom = {
   modeBatchBtn: document.getElementById("modeBatchBtn"),
   modeHint: document.getElementById("modeHint"),
   presetButtons: Array.from(document.querySelectorAll(".preset-btn")),
+  toggleContrastBtn: document.getElementById("toggleContrastBtn"),
   dropzone: document.getElementById("dropzone"),
   fileInput: document.getElementById("fileInput"),
   dropzoneTitle: document.getElementById("dropzoneTitle"),
@@ -24,6 +25,11 @@ const dom = {
   excludeLabels: document.getElementById("excludeLabels"),
   apiKeyInput: document.getElementById("apiKeyInput"),
   imageUrl: document.getElementById("imageUrl"),
+  customPresetName: document.getElementById("customPresetName"),
+  savePresetBtn: document.getElementById("savePresetBtn"),
+  customPresetList: document.getElementById("customPresetList"),
+  compactMode: document.getElementById("compactMode"),
+  highContrastMode: document.getElementById("highContrastMode"),
 
   analyzeBtn: document.getElementById("analyzeBtn"),
   downloadBtn: document.getElementById("downloadBtn"),
@@ -40,6 +46,7 @@ const dom = {
   tagsWrap: document.getElementById("tagsWrap"),
   tagDeltaWrap: document.getElementById("tagDeltaWrap"),
   detectionsBody: document.getElementById("detectionsBody"),
+  insightsPanel: document.getElementById("insightsPanel"),
   batchResults: document.getElementById("batchResults"),
 
   historySearch: document.getElementById("historySearch"),
@@ -311,6 +318,67 @@ function renderBatchResults(batchPayload) {
   dom.batchResults.appendChild(fragment);
 }
 
+function renderInsights(insights) {
+  clearElement(dom.insightsPanel);
+  if (!insights || !insights.total) {
+    dom.insightsPanel.className = "insights-empty";
+    dom.insightsPanel.textContent = "Insights serão exibidos após a análise.";
+    return;
+  }
+
+  dom.insightsPanel.className = "insights-grid";
+
+  const summary = document.createElement("div");
+  summary.className = "insights-summary";
+
+  const cards = [
+    ["Detecções", insights.total],
+    ["Confiança média", `${(Number(insights.averageConfidence) * 100).toFixed(1)}%`],
+    ["Pico de confiança", `${(Number(insights.highestConfidence) * 100).toFixed(1)}%`],
+    ["Labels únicas", insights.uniqueLabels],
+  ];
+
+  cards.forEach(([label, value]) => {
+    const card = document.createElement("article");
+    card.className = "insight-kpi";
+    const name = document.createElement("span");
+    name.textContent = String(label);
+    const amount = document.createElement("strong");
+    amount.textContent = String(value);
+    card.appendChild(name);
+    card.appendChild(amount);
+    summary.appendChild(card);
+  });
+
+  dom.insightsPanel.appendChild(summary);
+
+  const bars = document.createElement("div");
+  bars.className = "insight-bars";
+  safeArray(insights.topLabels).forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "insight-bar";
+
+    const label = document.createElement("span");
+    label.textContent = item.label;
+    row.appendChild(label);
+
+    const track = document.createElement("div");
+    track.className = "insight-track";
+    const fill = document.createElement("div");
+    fill.className = "insight-fill";
+    fill.style.width = `${Math.max(6, Math.round((Number(item.maxConfidence) || 0) * 100))}%`;
+    track.appendChild(fill);
+    row.appendChild(track);
+
+    const meta = document.createElement("strong");
+    meta.textContent = `${item.count}x`;
+    row.appendChild(meta);
+
+    bars.appendChild(row);
+  });
+  dom.insightsPanel.appendChild(bars);
+}
+
 function makeHistoryItem(entry) {
   const item = document.createElement("li");
   item.className = "history-item";
@@ -360,6 +428,52 @@ function renderHistory(entries) {
   dom.historyList.appendChild(fragment);
 }
 
+function renderCustomPresets(presets) {
+  clearElement(dom.customPresetList);
+  if (!presets || !presets.length) {
+    const item = document.createElement("li");
+    item.className = "custom-preset-item custom-preset-empty";
+    item.textContent = "Nenhum preset personalizado salvo.";
+    dom.customPresetList.appendChild(item);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  safeArray(presets).forEach((preset) => {
+    const item = document.createElement("li");
+    item.className = "custom-preset-item";
+
+    const details = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = preset.name || "Preset";
+    const subtitle = document.createElement("span");
+    subtitle.textContent = `conf ${preset.config?.conf ?? "-"} • tags ${preset.config?.maxTags ?? "-"}`;
+    details.appendChild(title);
+    details.appendChild(subtitle);
+
+    const applyButton = document.createElement("button");
+    applyButton.type = "button";
+    applyButton.className = "btn-mini";
+    applyButton.dataset.action = "apply-preset";
+    applyButton.dataset.presetId = String(preset.id || "");
+    applyButton.textContent = "Aplicar";
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "btn-mini is-danger";
+    deleteButton.dataset.action = "remove-preset";
+    deleteButton.dataset.presetId = String(preset.id || "");
+    deleteButton.textContent = "Excluir";
+
+    item.appendChild(details);
+    item.appendChild(applyButton);
+    item.appendChild(deleteButton);
+    fragment.appendChild(item);
+  });
+
+  dom.customPresetList.appendChild(fragment);
+}
+
 function setMode(mode) {
   const isSingle = mode === MODES.single;
 
@@ -389,6 +503,24 @@ function setFormValues(config) {
   dom.includeLabels.value = config.includeLabels || "";
   dom.excludeLabels.value = config.excludeLabels || "";
   dom.apiKeyInput.value = config.apiKey || "";
+}
+
+function setUiSettings(settings) {
+  const compact = Boolean(settings?.compactMode);
+  const highContrast = Boolean(settings?.highContrastMode);
+
+  document.documentElement.dataset.density = compact ? "compact" : "comfortable";
+  document.documentElement.dataset.contrast = highContrast ? "high" : "normal";
+
+  if (dom.compactMode) {
+    dom.compactMode.checked = compact;
+  }
+  if (dom.highContrastMode) {
+    dom.highContrastMode.checked = highContrast;
+  }
+  if (dom.toggleContrastBtn) {
+    dom.toggleContrastBtn.textContent = highContrast ? "Contraste: Alto" : "Contraste";
+  }
 }
 
 function setMetrics(metrics) {
@@ -585,6 +717,7 @@ export const ui = {
   dom,
   setMode,
   setFormValues,
+  setUiSettings,
   setStatus,
   setLoading,
   setActionAvailability,
@@ -596,6 +729,8 @@ export const ui = {
   renderDetections,
   renderBatchResults,
   renderHistory,
+  renderCustomPresets,
+  renderInsights,
   focusHistorySearch,
   openShortcuts,
   closeShortcuts,

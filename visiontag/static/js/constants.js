@@ -14,8 +14,11 @@ export const MODES = {
 
 export const HISTORY_KEY = "visiontag:history:v2";
 export const PREFERENCES_KEY = "visiontag:preferences:v1";
+export const CUSTOM_PRESETS_KEY = "visiontag:custom-presets:v1";
+export const UI_SETTINGS_KEY = "visiontag:ui-settings:v1";
 export const MAX_HISTORY_ITEMS = 20;
 export const MAX_BATCH_FILES = 12;
+export const MAX_CUSTOM_PRESETS = 8;
 
 export const STATUS_VARIANT = {
   neutral: "neutral",

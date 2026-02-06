@@ -3,12 +3,15 @@ import {
   CONFIG_PRESETS,
   DEFAULT_CONFIG,
   MAX_BATCH_FILES,
+  MAX_CUSTOM_PRESETS,
   MODES,
   STATUS_VARIANT,
 } from "./constants.js";
 import {
   clamp,
   computeTagDelta,
+  debounce,
+  detectionInsights,
   fileNameList,
   flattenBatchTags,
   makeReportFilename,
@@ -16,10 +19,21 @@ import {
   safeArray,
   uniqueTags,
 } from "./helpers.js";
-import { clearHistory, loadHistory, loadPreferences, pushHistoryItem, savePreferences } from "./storage.js";
+import {
+  clearHistory,
+  loadCustomPresets,
+  loadHistory,
+  loadPreferences,
+  loadUiSettings,
+  pushHistoryItem,
+  saveCustomPresets,
+  savePreferences,
+  saveUiSettings,
+} from "./storage.js";
 import { ui } from "./ui.js";
 
 const savedPreferences = loadPreferences() || {};
+const savedUiSettings = loadUiSettings() || {};
 const initialMode = savedPreferences.mode === MODES.batch ? MODES.batch : MODES.single;
 
 function normalizeConfig(candidate) {
@@ -35,6 +49,13 @@ function normalizeConfig(candidate) {
   };
 }
 
+function normalizeUiSettings(candidate) {
+  return {
+    compactMode: Boolean(candidate?.compactMode),
+    highContrastMode: Boolean(candidate?.highContrastMode),
+  };
+}
+
 const state = {
   mode: initialMode,
   config: normalizeConfig(savedPreferences.config),
@@ -47,6 +68,8 @@ const state = {
   tagDelta: null,
   previousSingleTags: [],
   history: loadHistory(),
+  customPresets: loadCustomPresets(),
+  uiSettings: normalizeUiSettings(savedUiSettings),
   historyQuery: "",
   requestController: null,
 };
@@ -81,6 +104,22 @@ function applyModeUI() {
 
 function syncConfigUI() {
   ui.setFormValues(state.config);
+}
+
+function syncUiSettings() {
+  ui.setUiSettings(state.uiSettings);
+}
+
+function persistUiSettings() {
+  saveUiSettings(state.uiSettings);
+}
+
+function renderCustomPresets() {
+  ui.renderCustomPresets(state.customPresets);
+}
+
+function persistCustomPresets() {
+  saveCustomPresets(state.customPresets);
 }
 
 function persistUserPreferences() {
@@ -164,18 +203,22 @@ function renderResultSurface() {
   const minConfidence = state.config.visualFilterPercent;
 
   if (state.mode === MODES.single && state.singleResult) {
+    const detections = safeArray(state.singleResult.detections);
     ui.renderTags(safeArray(state.singleResult.tags));
     ui.renderTagDelta(state.tagDelta);
-    ui.renderDetections(safeArray(state.singleResult.detections), minConfidence);
+    ui.renderDetections(detections, minConfidence);
+    ui.renderInsights(detectionInsights(detections));
     ui.setMetrics(computeSingleMetrics(state.singleResult));
     ui.renderBatchResults(state.batchResult);
     return;
   }
 
   if (state.mode === MODES.batch && state.batchResult) {
+    const detections = flattenBatchDetections(state.batchResult);
     ui.renderTags(getActiveTags());
     ui.renderTagDelta(null);
-    ui.renderDetections(flattenBatchDetections(state.batchResult), minConfidence);
+    ui.renderDetections(detections, minConfidence);
+    ui.renderInsights(detectionInsights(detections));
     ui.setMetrics(computeBatchMetrics(state.batchResult));
     ui.renderBatchResults(state.batchResult);
     return;
@@ -184,6 +227,7 @@ function renderResultSurface() {
   ui.renderTags([]);
   ui.renderTagDelta(null);
   ui.renderDetections([], minConfidence);
+  ui.renderInsights(null);
   ui.setMetrics({ files: 0, detections: 0, inference: 0, uniqueTags: 0 });
   ui.renderBatchResults(state.batchResult);
 }
@@ -519,24 +563,94 @@ function bindDropzoneEvents() {
   });
 }
 
-function applyPreset(presetKey) {
-  const preset = CONFIG_PRESETS[presetKey];
-  if (!preset) {
-    return;
-  }
-
+function applyConfigPreset(presetConfig, label) {
   state.config = {
     ...state.config,
-    conf: preset.conf,
-    maxTags: preset.maxTags,
-    minAreaPercent: preset.minAreaPercent,
-    includePerson: preset.includePerson,
+    conf: clamp(Number(presetConfig.conf), 0.1, 0.95),
+    maxTags: clamp(Number(presetConfig.maxTags), 1, 25),
+    minAreaPercent: clamp(Number(presetConfig.minAreaPercent), 0, 50),
+    includePerson: Boolean(presetConfig.includePerson),
+    includeLabels: String(presetConfig.includeLabels || ""),
+    excludeLabels: String(presetConfig.excludeLabels || ""),
   };
 
   syncConfigUI();
   renderResultSurface();
   persistUserPreferences();
-  setStatus(`Preset aplicado: ${preset.label}.`, STATUS_VARIANT.neutral);
+  setStatus(`Preset aplicado: ${label}.`, STATUS_VARIANT.neutral);
+}
+
+function applyPreset(presetKey) {
+  const preset = CONFIG_PRESETS[presetKey];
+  if (!preset) {
+    return;
+  }
+  applyConfigPreset(preset, preset.label);
+}
+
+function saveCurrentCustomPreset() {
+  const rawName = String(ui.dom.customPresetName.value || "").trim();
+  if (!rawName) {
+    setStatus("Informe um nome para salvar o preset.", STATUS_VARIANT.error);
+    return;
+  }
+
+  const nextPreset = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: rawName.slice(0, 36),
+    config: {
+      conf: state.config.conf,
+      maxTags: state.config.maxTags,
+      minAreaPercent: state.config.minAreaPercent,
+      includePerson: state.config.includePerson,
+      includeLabels: state.config.includeLabels,
+      excludeLabels: state.config.excludeLabels,
+    },
+  };
+
+  const sameNameIndex = state.customPresets.findIndex((preset) => preset.name.toLowerCase() === nextPreset.name.toLowerCase());
+  if (sameNameIndex >= 0) {
+    state.customPresets[sameNameIndex] = nextPreset;
+  } else {
+    state.customPresets = [nextPreset, ...state.customPresets].slice(0, MAX_CUSTOM_PRESETS);
+  }
+
+  persistCustomPresets();
+  renderCustomPresets();
+  ui.dom.customPresetName.value = "";
+  setStatus(`Preset personalizado salvo: ${nextPreset.name}.`, STATUS_VARIANT.success);
+}
+
+function applyCustomPresetById(presetId) {
+  const preset = state.customPresets.find((item) => String(item.id) === String(presetId));
+  if (!preset) {
+    setStatus("Preset não encontrado.", STATUS_VARIANT.error);
+    return;
+  }
+  applyConfigPreset(preset.config || {}, preset.name || "Preset personalizado");
+}
+
+function removeCustomPresetById(presetId) {
+  const previousSize = state.customPresets.length;
+  state.customPresets = state.customPresets.filter((item) => String(item.id) !== String(presetId));
+  if (state.customPresets.length === previousSize) {
+    return;
+  }
+  persistCustomPresets();
+  renderCustomPresets();
+  setStatus("Preset personalizado removido.", STATUS_VARIANT.neutral);
+}
+
+function setHighContrast(enabled) {
+  state.uiSettings.highContrastMode = Boolean(enabled);
+  syncUiSettings();
+  persistUiSettings();
+}
+
+function setCompactMode(enabled) {
+  state.uiSettings.compactMode = Boolean(enabled);
+  syncUiSettings();
+  persistUiSettings();
 }
 
 function isTypingContext(target) {
@@ -586,6 +700,12 @@ function bindGlobalShortcuts() {
       return;
     }
 
+    if (event.ctrlKey && (event.key === "h" || event.key === "H")) {
+      event.preventDefault();
+      setHighContrast(!state.uiSettings.highContrastMode);
+      return;
+    }
+
     if (typing) {
       return;
     }
@@ -593,6 +713,11 @@ function bindGlobalShortcuts() {
 }
 
 function bindEvents() {
+  const debouncedHistoryRender = debounce((value) => {
+    state.historyQuery = value || "";
+    renderHistory();
+  }, 140);
+
   ui.dom.modeSingleBtn.addEventListener("click", () => switchMode(MODES.single));
   ui.dom.modeBatchBtn.addEventListener("click", () => switchMode(MODES.batch));
 
@@ -621,12 +746,39 @@ function bindEvents() {
   ui.dom.clearBtn.addEventListener("click", clearAll);
   ui.dom.openShortcutsBtn.addEventListener("click", ui.openShortcuts);
   ui.dom.closeShortcutsBtn.addEventListener("click", ui.closeShortcuts);
+  ui.dom.toggleContrastBtn.addEventListener("click", () => setHighContrast(!state.uiSettings.highContrastMode));
   ui.dom.refreshMetricsBtn.addEventListener("click", loadOperationalOverview);
   ui.dom.clearCacheBtn.addEventListener("click", clearOperationalCacheData);
+  ui.dom.savePresetBtn.addEventListener("click", saveCurrentCustomPreset);
+  ui.dom.customPresetName.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveCurrentCustomPreset();
+    }
+  });
+  ui.dom.customPresetList.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const action = target.dataset.action;
+    const presetId = target.dataset.presetId;
+    if (!action || !presetId) {
+      return;
+    }
+    if (action === "apply-preset") {
+      applyCustomPresetById(presetId);
+      return;
+    }
+    if (action === "remove-preset") {
+      removeCustomPresetById(presetId);
+    }
+  });
+  ui.dom.compactMode.addEventListener("change", () => setCompactMode(ui.dom.compactMode.checked));
+  ui.dom.highContrastMode.addEventListener("change", () => setHighContrast(ui.dom.highContrastMode.checked));
 
   ui.dom.historySearch.addEventListener("input", (event) => {
-    state.historyQuery = event.target.value || "";
-    renderHistory();
+    debouncedHistoryRender(event.target.value || "");
   });
 
   ui.dom.clearHistoryBtn.addEventListener("click", () => {
@@ -641,11 +793,13 @@ function bindEvents() {
 }
 
 function init() {
+  syncUiSettings();
   applyModeUI();
   syncConfigUI();
   updateInputPreviewAndQueue();
   renderResultSurface();
   ui.renderOperationalOverview(state.operationalOverview);
+  renderCustomPresets();
   renderHistory();
   refreshActionAvailability();
   setStatus("Selecione uma imagem para iniciar a análise.", STATUS_VARIANT.neutral);
