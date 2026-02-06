@@ -153,8 +153,26 @@ class DetectionService:
         self._telemetry.record_detection(detections_count=result.total_detections, cached=False)
         return result
 
-    def detect_from_bytes(self, payload: bytes, options: DetectionOptions) -> DetectionResult:
-        return self._predict(payload=payload, options=options)
+    def detect_from_bytes(
+        self,
+        payload: bytes,
+        options: DetectionOptions,
+        *,
+        source: str = "upload",
+        principal_id: str = "unknown",
+        request_id: str = "n/a",
+    ) -> DetectionResult:
+        result = self._predict(payload=payload, options=options)
+        self._telemetry.record_analysis(
+            source=source,
+            principal_id=principal_id,
+            request_id=request_id,
+            tags=result.tags,
+            total_detections=result.total_detections,
+            inference_ms=result.inference_ms or 0.0,
+            cached=result.cached,
+        )
+        return result
 
     def detect_batch(self, files: Sequence[Tuple[str, bytes]], options: DetectionOptions) -> BatchDetectResponse:
         if not files:
@@ -169,7 +187,13 @@ class DetectionService:
         for filename, payload in files:
             safe_name = sanitize_filename(filename)
             try:
-                result = self._predict(payload=payload, options=options)
+                result = self.detect_from_bytes(
+                    payload=payload,
+                    options=options,
+                    source="batch",
+                    principal_id="batch",
+                    request_id="batch",
+                )
                 items.append(BatchItemResult(filename=safe_name, result=result))
                 all_tags.extend(result.tags)
                 success += 1

@@ -1,4 +1,4 @@
-import { detectBatch, detectSingle } from "./api.js";
+import { detectBatch, detectByUrl, detectSingle, fetchOperationalMetrics } from "./api.js";
 import {
   CONFIG_PRESETS,
   DEFAULT_CONFIG,
@@ -29,6 +29,9 @@ function normalizeConfig(candidate) {
     minAreaPercent: clamp(Number(candidate?.minAreaPercent ?? DEFAULT_CONFIG.minAreaPercent), 0, 50),
     includePerson: Boolean(candidate?.includePerson ?? DEFAULT_CONFIG.includePerson),
     visualFilterPercent: clamp(Number(candidate?.visualFilterPercent ?? DEFAULT_CONFIG.visualFilterPercent), 0, 95),
+    includeLabels: String(candidate?.includeLabels ?? DEFAULT_CONFIG.includeLabels ?? ""),
+    excludeLabels: String(candidate?.excludeLabels ?? DEFAULT_CONFIG.excludeLabels ?? ""),
+    apiKey: "",
   };
 }
 
@@ -40,6 +43,7 @@ const state = {
   previewUrl: null,
   singleResult: null,
   batchResult: null,
+  operationalMetrics: null,
   tagDelta: null,
   previousSingleTags: [],
   history: loadHistory(),
@@ -80,9 +84,13 @@ function syncConfigUI() {
 }
 
 function persistUserPreferences() {
+  const persistedConfig = {
+    ...state.config,
+    apiKey: "",
+  };
   savePreferences({
     mode: state.mode,
-    config: { ...state.config },
+    config: persistedConfig,
   });
 }
 
@@ -216,13 +224,15 @@ function renderHistory() {
 }
 
 function pushSingleHistory(payload) {
+  const imageUrl = String(ui.dom.imageUrl.value || "").trim();
+  const fileName = state.selectedFile?.name || (imageUrl ? `URL: ${imageUrl}` : "arquivo");
   const entry = {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     at: nowPtBr(),
     mode: MODES.single,
-    fileName: state.selectedFile?.name || "arquivo",
+    fileName,
     fileCount: 1,
-    files: [state.selectedFile?.name || "arquivo"],
+    files: [fileName],
     tags: safeArray(payload.tags),
     totalDetections: payload.total_detections || 0,
     inferenceMs: payload.inference_ms || 0,
@@ -262,6 +272,7 @@ function clearCurrentSelection() {
   state.selectedFile = null;
   state.batchFiles = [];
   ui.dom.fileInput.value = "";
+  ui.dom.imageUrl.value = "";
   updateInputPreviewAndQueue();
 }
 
@@ -375,8 +386,10 @@ async function runAnalysis() {
     state.requestController.abort();
   }
 
-  if (state.mode === MODES.single && !state.selectedFile) {
-    setStatus("Selecione uma imagem antes de analisar.", STATUS_VARIANT.error);
+  const imageUrl = String(ui.dom.imageUrl.value || "").trim();
+
+  if (state.mode === MODES.single && !state.selectedFile && !imageUrl) {
+    setStatus("Selecione uma imagem ou informe uma URL para analisar.", STATUS_VARIANT.error);
     return;
   }
 
@@ -396,7 +409,9 @@ async function runAnalysis() {
       const previousTags = uniqueTags(
         safeArray(state.previousSingleTags.length ? state.previousSingleTags : state.singleResult?.tags)
       );
-      const payload = await detectSingle(state.selectedFile, state.config, controller.signal);
+      const payload = state.selectedFile
+        ? await detectSingle(state.selectedFile, state.config, controller.signal)
+        : await detectByUrl(imageUrl, state.config, controller.signal);
       state.singleResult = payload;
       state.tagDelta = computeTagDelta(previousTags, payload.tags);
       state.previousSingleTags = uniqueTags(safeArray(payload.tags));
@@ -430,12 +445,28 @@ function clearAll() {
   setStatus("Interface limpa e pronta para nova análise.", STATUS_VARIANT.neutral);
 }
 
+async function loadMetrics() {
+  const controller = new AbortController();
+  try {
+    setStatus("Consultando métricas operacionais...", STATUS_VARIANT.loading);
+    const payload = await fetchOperationalMetrics(state.config, controller.signal);
+    state.operationalMetrics = payload;
+    ui.renderOperationalMetrics(payload);
+    setStatus("Métricas atualizadas.", STATUS_VARIANT.success);
+  } catch (error) {
+    setStatus(error?.message || "Falha ao carregar métricas.", STATUS_VARIANT.error);
+  }
+}
+
 function updateConfigFromForm() {
   state.config.conf = clamp(Number(ui.dom.confRange.value), 0.1, 0.95);
   state.config.maxTags = clamp(Number(ui.dom.maxTags.value) || 5, 1, 25);
   state.config.minAreaPercent = clamp(Number(ui.dom.minArea.value) || 1, 0, 50);
   state.config.includePerson = Boolean(ui.dom.includePerson.checked);
   state.config.visualFilterPercent = clamp(Number(ui.dom.filterRange.value) || 0, 0, 95);
+  state.config.includeLabels = String(ui.dom.includeLabels.value || "");
+  state.config.excludeLabels = String(ui.dom.excludeLabels.value || "");
+  state.config.apiKey = String(ui.dom.apiKeyInput.value || "");
 
   syncConfigUI();
   renderResultSurface();
@@ -563,6 +594,9 @@ function bindEvents() {
   ui.dom.minArea.addEventListener("change", updateConfigFromForm);
   ui.dom.includePerson.addEventListener("change", updateConfigFromForm);
   ui.dom.filterRange.addEventListener("input", updateConfigFromForm);
+  ui.dom.includeLabels.addEventListener("change", updateConfigFromForm);
+  ui.dom.excludeLabels.addEventListener("change", updateConfigFromForm);
+  ui.dom.apiKeyInput.addEventListener("change", updateConfigFromForm);
 
   ui.dom.analyzeBtn.addEventListener("click", runAnalysis);
   ui.dom.copyTagsBtn.addEventListener("click", copyCurrentTags);
@@ -570,6 +604,7 @@ function bindEvents() {
   ui.dom.clearBtn.addEventListener("click", clearAll);
   ui.dom.openShortcutsBtn.addEventListener("click", ui.openShortcuts);
   ui.dom.closeShortcutsBtn.addEventListener("click", ui.closeShortcuts);
+  ui.dom.refreshMetricsBtn.addEventListener("click", loadMetrics);
 
   ui.dom.historySearch.addEventListener("input", (event) => {
     state.historyQuery = event.target.value || "";
@@ -592,6 +627,7 @@ function init() {
   syncConfigUI();
   updateInputPreviewAndQueue();
   renderResultSurface();
+  ui.renderOperationalMetrics(state.operationalMetrics);
   renderHistory();
   refreshActionAvailability();
   setStatus("Selecione uma imagem para iniciar a análise.", STATUS_VARIANT.neutral);

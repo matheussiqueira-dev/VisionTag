@@ -1,6 +1,8 @@
 export const API_ROUTES = {
   detectSingle: "/api/v1/detect",
   detectBatch: "/api/v1/detect/batch",
+  detectUrl: "/api/v1/detect/url",
+  metrics: "/api/v1/metrics",
 };
 
 export const MODES = {
@@ -26,6 +28,9 @@ export const DEFAULT_CONFIG = {
   minAreaPercent: 1,
   includePerson: false,
   visualFilterPercent: 0,
+  includeLabels: "",
+  excludeLabels: "",
+  apiKey: "",
 };
 
 export const CONFIG_PRESETS = {

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 
 
 class BoundingBox(BaseModel):
@@ -80,6 +80,11 @@ class RuntimeSettingsResponse(BaseModel):
     max_dimension: int = Field(..., ge=1)
     cache_ttl_seconds: int = Field(..., ge=0)
     cache_max_items: int = Field(..., ge=1)
+    max_concurrent_inference: int = Field(..., ge=1)
+    cors_origins: List[str]
+    enable_gzip: bool
+    remote_fetch_timeout_seconds: int = Field(..., ge=1)
+    max_remote_image_mb: int = Field(..., ge=1)
 
 
 class CacheStatsResponse(BaseModel):
@@ -88,3 +93,23 @@ class CacheStatsResponse(BaseModel):
 
 class CacheClearResponse(BaseModel):
     removed_items: int = Field(..., ge=0)
+
+
+class DetectUrlRequest(BaseModel):
+    image_url: HttpUrl
+
+
+class RecentDetectionEntry(BaseModel):
+    timestamp: str
+    source: str
+    principal_id: str
+    request_id: str
+    tags: List[str]
+    total_detections: int = Field(..., ge=0)
+    inference_ms: float = Field(..., ge=0)
+    cached: bool = False
+
+
+class RecentDetectionResponse(BaseModel):
+    total: int = Field(..., ge=0)
+    items: List[RecentDetectionEntry]

@@ -84,6 +84,9 @@
           </div>
 
           <ul id="fileQueue" class="file-queue" aria-label="Arquivos selecionados"></ul>
+
+          <label class="field-label" for="imageUrl">Ou analyze por URL (modo imagem única)</label>
+          <input id="imageUrl" type="url" placeholder="https://exemplo.com/imagem.jpg" />
         </article>
 
         <article class="card section-card reveal">
@@ -111,6 +114,15 @@
             <output id="filterValue" class="mono">0%</output>
           </label>
           <input id="filterRange" type="range" min="0" max="95" step="1" value="0" />
+
+          <label class="field-label" for="includeLabels">Incluir somente labels (CSV)</label>
+          <input id="includeLabels" type="text" placeholder="mesa, notebook, cadeira" />
+
+          <label class="field-label" for="excludeLabels">Excluir labels (CSV)</label>
+          <input id="excludeLabels" type="text" placeholder="pessoa, tv" />
+
+          <label class="field-label" for="apiKeyInput">API Key (opcional)</label>
+          <input id="apiKeyInput" type="password" autocomplete="off" placeholder="X-API-Key para ambientes protegidos" />
 
           <div class="preset-wrap" aria-label="Presets de inferência">
             <span>Presets rápidos</span>
@@ -207,6 +219,15 @@
             <input id="historySearch" type="search" placeholder="Buscar por arquivo, tag ou data" />
           </div>
           <ul id="historyList" class="history-list" aria-live="polite"></ul>
+        </article>
+
+        <article class="card section-card reveal">
+          <div class="header-inline">
+            <h3>Painel Operacional</h3>
+            <button type="button" id="refreshMetricsBtn" class="btn btn-tiny">Atualizar métricas</button>
+          </div>
+          <p class="help-text">Requer escopo <code>admin</code> quando autenticação estiver habilitada.</p>
+          <div id="metricsPanel" class="ops-panel-empty">Métricas ainda não carregadas.</div>
         </article>
       </section>
     </section>

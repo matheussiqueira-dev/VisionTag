@@ -20,6 +20,10 @@ const dom = {
   includePerson: document.getElementById("includePerson"),
   filterRange: document.getElementById("filterRange"),
   filterValue: document.getElementById("filterValue"),
+  includeLabels: document.getElementById("includeLabels"),
+  excludeLabels: document.getElementById("excludeLabels"),
+  apiKeyInput: document.getElementById("apiKeyInput"),
+  imageUrl: document.getElementById("imageUrl"),
 
   analyzeBtn: document.getElementById("analyzeBtn"),
   downloadBtn: document.getElementById("downloadBtn"),
@@ -41,6 +45,8 @@ const dom = {
   historySearch: document.getElementById("historySearch"),
   historyList: document.getElementById("historyList"),
   clearHistoryBtn: document.getElementById("clearHistoryBtn"),
+  refreshMetricsBtn: document.getElementById("refreshMetricsBtn"),
+  metricsPanel: document.getElementById("metricsPanel"),
 
   openShortcutsBtn: document.getElementById("openShortcutsBtn"),
   closeShortcutsBtn: document.getElementById("closeShortcutsBtn"),
@@ -377,6 +383,9 @@ function setFormValues(config) {
 
   dom.filterRange.value = String(config.visualFilterPercent);
   dom.filterValue.textContent = `${config.visualFilterPercent}%`;
+  dom.includeLabels.value = config.includeLabels || "";
+  dom.excludeLabels.value = config.excludeLabels || "";
+  dom.apiKeyInput.value = config.apiKey || "";
 }
 
 function setMetrics(metrics) {
@@ -404,6 +413,43 @@ function setLoading(isLoading) {
 function setActionAvailability({ canExport, canCopy }) {
   dom.downloadBtn.disabled = !canExport;
   dom.copyTagsBtn.disabled = !canCopy;
+}
+
+function renderOperationalMetrics(metrics) {
+  clearElement(dom.metricsPanel);
+
+  if (!metrics) {
+    dom.metricsPanel.className = "ops-panel-empty";
+    dom.metricsPanel.textContent = "Métricas ainda não carregadas.";
+    return;
+  }
+
+  dom.metricsPanel.className = "ops-panel-grid";
+  const fields = [
+    ["Requests", metrics.requests_total],
+    ["Erros", metrics.errors_total],
+    ["Detecções", metrics.detections_total],
+    ["Cache hits", metrics.cache_hits],
+    ["Latência média", `${metrics.average_latency_ms} ms`],
+    ["Uptime", `${metrics.uptime_seconds}s`],
+  ];
+
+  const fragment = document.createDocumentFragment();
+  fields.forEach(([label, value]) => {
+    const item = document.createElement("article");
+    item.className = "ops-item";
+
+    const name = document.createElement("span");
+    name.textContent = String(label);
+    const amount = document.createElement("strong");
+    amount.textContent = String(value);
+
+    item.appendChild(name);
+    item.appendChild(amount);
+    fragment.appendChild(item);
+  });
+
+  dom.metricsPanel.appendChild(fragment);
 }
 
 function focusHistorySearch() {
@@ -440,4 +486,5 @@ export const ui = {
   focusHistorySearch,
   openShortcuts,
   closeShortcuts,
+  renderOperationalMetrics,
 };

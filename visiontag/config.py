@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Set
+from typing import Dict, Set, Tuple
 
 
 DEFAULT_SCOPES = {"detect", "admin"}
@@ -22,6 +22,12 @@ def _parse_int(value: str | None, default: int, minimum: int) -> int:
     except ValueError:
         return default
     return max(minimum, parsed)
+
+
+def _parse_csv(value: str | None) -> Tuple[str, ...]:
+    if not value:
+        return ()
+    return tuple(item.strip() for item in value.split(",") if item and item.strip())
 
 
 def parse_api_keys(raw: str | None, fallback_key: str) -> Dict[str, Set[str]]:
@@ -69,6 +75,11 @@ class Settings:
     api_keys: Dict[str, Set[str]] = field(default_factory=dict)
     rate_limit_per_minute: int = 120
     log_level: str = "INFO"
+    max_concurrent_inference: int = 2
+    cors_origins: Tuple[str, ...] = ("*",)
+    enable_gzip: bool = True
+    remote_fetch_timeout_seconds: int = 8
+    max_remote_image_mb: int = 8
 
     @property
     def max_upload_bytes(self) -> int:
@@ -93,4 +104,13 @@ class Settings:
             api_keys=api_keys,
             rate_limit_per_minute=_parse_int(os.getenv("VISIONTAG_RATE_LIMIT_PER_MINUTE"), default=120, minimum=10),
             log_level=os.getenv("VISIONTAG_LOG_LEVEL", "INFO").upper(),
+            max_concurrent_inference=_parse_int(os.getenv("VISIONTAG_MAX_CONCURRENT_INFERENCE"), default=2, minimum=1),
+            cors_origins=_parse_csv(os.getenv("VISIONTAG_CORS_ORIGINS", "*")),
+            enable_gzip=_parse_bool(os.getenv("VISIONTAG_ENABLE_GZIP"), default=True),
+            remote_fetch_timeout_seconds=_parse_int(
+                os.getenv("VISIONTAG_REMOTE_FETCH_TIMEOUT_SECONDS"),
+                default=8,
+                minimum=1,
+            ),
+            max_remote_image_mb=_parse_int(os.getenv("VISIONTAG_MAX_REMOTE_IMAGE_MB"), default=8, minimum=1),
         )

@@ -442,7 +442,10 @@ input[type="range"] {
 }
 
 input[type="number"],
-input[type="search"] {
+input[type="search"],
+input[type="text"],
+input[type="url"],
+input[type="password"] {
   margin-top: 6px;
   width: 100%;
   border: 1px solid rgba(123, 158, 185, 0.34);
@@ -454,6 +457,12 @@ input[type="search"] {
 }
 
 input[type="search"]::placeholder {
+  color: #7f99af;
+}
+
+input[type="text"]::placeholder,
+input[type="url"]::placeholder,
+input[type="password"]::placeholder {
   color: #7f99af;
 }
 
@@ -770,6 +779,46 @@ td {
   gap: 6px;
 }
 
+.ops-panel-empty,
+.ops-panel-grid {
+  margin-top: 8px;
+  min-height: 60px;
+}
+
+.ops-panel-empty {
+  border: 1px dashed rgba(120, 158, 183, 0.3);
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.ops-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.ops-item {
+  border: 1px solid rgba(122, 160, 186, 0.24);
+  border-radius: 10px;
+  background: rgba(8, 22, 36, 0.76);
+  padding: 9px;
+  display: grid;
+  gap: 4px;
+}
+
+.ops-item span {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.ops-item strong {
+  font-size: 0.86rem;
+  font-family: var(--font-mono);
+}
+
 .history-item strong {
   font-size: 0.79rem;
   color: #dff0ff;
@@ -914,6 +963,10 @@ kbd {
   }
 
   .delta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-panel-grid {
     grid-template-columns: 1fr;
   }
 }

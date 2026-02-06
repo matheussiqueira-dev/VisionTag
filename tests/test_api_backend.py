@@ -8,7 +8,7 @@ class FakeDetectionService:
     def __init__(self):
         self.calls = 0
 
-    def detect_from_bytes(self, payload, options):
+    def detect_from_bytes(self, payload, options, **kwargs):
         self.calls += 1
         return DetectionResult(
             tags=["mesa"],
@@ -103,3 +103,27 @@ def test_batch_endpoint_returns_summary():
     assert payload["summary"]["total_files"] == 2
     assert payload["summary"]["success"] == 1
     assert payload["summary"]["failed"] == 1
+
+
+def test_detect_url_endpoint_returns_contract(monkeypatch):
+    provider = FakeProvider()
+    app.state.detection_service_provider = provider
+
+    async def fake_fetch_remote_image(*, url, timeout_seconds, max_bytes):
+        assert url == "https://example.com/camera.png"
+        assert timeout_seconds >= 1
+        assert max_bytes > 0
+        return b"remote-image"
+
+    monkeypatch.setattr("visiontag.api.fetch_remote_image", fake_fetch_remote_image)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/detect/url",
+            json={"image_url": "https://example.com/camera.png"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tags"] == ["mesa"]
+    assert payload["cached"] is False

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -8,6 +9,8 @@ from typing import List
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Query, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -15,15 +18,19 @@ from .config import Settings
 from .detector import DetectionOptions
 from .errors import AppError, InvalidInputError, PayloadTooLargeError, UnsupportedMediaTypeError, register_exception_handlers
 from .logging_config import configure_logging
+from .remote_fetch import fetch_remote_image
 from .schemas import (
     BatchDetectResponse,
     BatchItemResult,
     BatchSummary,
     CacheClearResponse,
     CacheStatsResponse,
+    DetectUrlRequest,
     DetectionResult,
     HealthResponse,
     LabelsResponse,
+    RecentDetectionEntry,
+    RecentDetectionResponse,
     RuntimeSettingsResponse,
     TelemetryResponse,
 )
@@ -57,7 +64,7 @@ def create_app(app_settings: Settings) -> FastAPI:
         lifespan=lifespan,
     )
 
-    telemetry = TelemetryStore()
+    telemetry = TelemetryStore(recent_capacity=250)
     auth_service = AuthService(app_settings)
     rate_limiter = SlidingWindowRateLimiter(limit=app_settings.rate_limit_per_minute)
 
@@ -74,6 +81,19 @@ def create_app(app_settings: Settings) -> FastAPI:
     app.state.auth_service = auth_service
     app.state.rate_limiter = rate_limiter
     app.state.detection_service_provider = detection_provider
+    app.state.inference_semaphore = asyncio.Semaphore(app_settings.max_concurrent_inference)
+
+    cors_origins = list(app_settings.cors_origins) if app_settings.cors_origins else ["*"]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+        expose_headers=["X-Request-ID"],
+    )
+    if app_settings.enable_gzip:
+        app.add_middleware(GZipMiddleware, minimum_size=1024)
 
     security_headers = {
         "X-Content-Type-Options": "nosniff",
@@ -142,6 +162,10 @@ def create_app(app_settings: Settings) -> FastAPI:
 
         return data
 
+    def principal_id_from_request(request: Request) -> str:
+        principal = getattr(request.state, "principal", None)
+        return getattr(principal, "key_id", "anonymous")
+
     @app.get("/", include_in_schema=False)
     def index():
         index_file = static_dir / "index.html"
@@ -184,6 +208,28 @@ def create_app(app_settings: Settings) -> FastAPI:
         )
 
     @app.get(
+        "/api/v1/admin/recent",
+        response_model=RecentDetectionResponse,
+        dependencies=[Depends(require_access("admin"))],
+    )
+    def recent_detections(limit: int = Query(default=20, ge=1, le=100)) -> RecentDetectionResponse:
+        entries = app.state.telemetry.recent(limit=limit)
+        items = [
+            RecentDetectionEntry(
+                timestamp=item.timestamp,
+                source=item.source,
+                principal_id=item.principal_id,
+                request_id=item.request_id,
+                tags=item.tags,
+                total_detections=item.total_detections,
+                inference_ms=item.inference_ms,
+                cached=item.cached,
+            )
+            for item in entries
+        ]
+        return RecentDetectionResponse(total=len(items), items=items)
+
+    @app.get(
         "/api/v1/admin/runtime",
         response_model=RuntimeSettingsResponse,
         dependencies=[Depends(require_access("admin"))],
@@ -199,6 +245,11 @@ def create_app(app_settings: Settings) -> FastAPI:
             max_dimension=app_settings.max_dimension,
             cache_ttl_seconds=app_settings.cache_ttl_seconds,
             cache_max_items=app_settings.cache_max_items,
+            max_concurrent_inference=app_settings.max_concurrent_inference,
+            cors_origins=list(app_settings.cors_origins),
+            enable_gzip=app_settings.enable_gzip,
+            remote_fetch_timeout_seconds=app_settings.remote_fetch_timeout_seconds,
+            max_remote_image_mb=app_settings.max_remote_image_mb,
         )
 
     @app.get(
@@ -224,12 +275,46 @@ def create_app(app_settings: Settings) -> FastAPI:
         dependencies=[Depends(require_access("detect", apply_rate_limit=True))],
     )
     async def detect(
+        request: Request,
         file: UploadFile = File(...),
         options: DetectionOptions = Depends(detection_options_dependency),
     ):
         data = await read_valid_upload(file)
         service = app.state.detection_service_provider.get()
-        return service.detect_from_bytes(payload=data, options=options)
+        async with app.state.inference_semaphore:
+            return service.detect_from_bytes(
+                payload=data,
+                options=options,
+                source="upload",
+                principal_id=principal_id_from_request(request),
+                request_id=request.state.request_id,
+            )
+
+    @app.post(
+        "/api/v1/detect/url",
+        response_model=DetectionResult,
+        dependencies=[Depends(require_access("detect", apply_rate_limit=True))],
+    )
+    async def detect_by_url(
+        request: Request,
+        body: DetectUrlRequest,
+        options: DetectionOptions = Depends(detection_options_dependency),
+    ) -> DetectionResult:
+        max_remote_bytes = app_settings.max_remote_image_mb * 1024 * 1024
+        payload = await fetch_remote_image(
+            url=str(body.image_url),
+            timeout_seconds=app_settings.remote_fetch_timeout_seconds,
+            max_bytes=max_remote_bytes,
+        )
+        service = app.state.detection_service_provider.get()
+        async with app.state.inference_semaphore:
+            return service.detect_from_bytes(
+                payload=payload,
+                options=options,
+                source="remote_url",
+                principal_id=principal_id_from_request(request),
+                request_id=request.state.request_id,
+            )
 
     @app.post(
         "/api/v1/detect/batch",
@@ -237,6 +322,7 @@ def create_app(app_settings: Settings) -> FastAPI:
         dependencies=[Depends(require_access("detect", apply_rate_limit=True))],
     )
     async def detect_batch(
+        request: Request,
         files: List[UploadFile] = File(...),
         options: DetectionOptions = Depends(detection_options_dependency),
     ) -> BatchDetectResponse:
@@ -252,12 +338,20 @@ def create_app(app_settings: Settings) -> FastAPI:
         success = 0
         failed = 0
         cached_hits = 0
+        principal_id = principal_id_from_request(request)
 
         for upload in files:
             filename = sanitize_filename(upload.filename)
             try:
                 payload = await read_valid_upload(upload)
-                result = service.detect_from_bytes(payload=payload, options=options)
+                async with app.state.inference_semaphore:
+                    result = service.detect_from_bytes(
+                        payload=payload,
+                        options=options,
+                        source="batch_upload",
+                        principal_id=principal_id,
+                        request_id=request.state.request_id,
+                    )
                 items.append(BatchItemResult(filename=filename, result=result))
                 all_tags.extend(result.tags)
                 success += 1
@@ -278,11 +372,19 @@ def create_app(app_settings: Settings) -> FastAPI:
 
     @app.post("/detect", dependencies=[Depends(require_access("detect", apply_rate_limit=True))])
     async def legacy_detect(
+        request: Request,
         file: UploadFile = File(...),
         options: DetectionOptions = Depends(detection_options_dependency),
     ) -> dict:
         data = await read_valid_upload(file)
-        result = app.state.detection_service_provider.get().detect_from_bytes(payload=data, options=options)
+        async with app.state.inference_semaphore:
+            result = app.state.detection_service_provider.get().detect_from_bytes(
+                payload=data,
+                options=options,
+                source="legacy_upload",
+                principal_id=principal_id_from_request(request),
+                request_id=request.state.request_id,
+            )
         return {"tags": result.tags}
 
     return app
