@@ -1,8 +1,5 @@
-from .detector import Detection, DetectionOptions, DetectionSummary, VisionTagger
+__version__ = "2.0.0"
 
-__all__ = [
-    "Detection",
-    "DetectionOptions",
-    "DetectionSummary",
-    "VisionTagger",
-]
+from .detector import VisionTagger
+
+__all__ = ["VisionTagger", "__version__"]

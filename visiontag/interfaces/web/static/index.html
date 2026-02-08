@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VisionTag | Detecção Inteligente</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <div class="ambient-shape ambient-shape-a" aria-hidden="true"></div>
+  <div class="ambient-shape ambient-shape-b" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-pill">VisionTag</span>
+      <h1>Plataforma de Rotulagem Visual</h1>
+    </div>
+    <div id="healthBadge" class="health-badge" role="status" aria-live="polite">
+      Verificando API...
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel panel-input" aria-labelledby="inputTitle">
+      <h2 id="inputTitle">Entrada</h2>
+
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Selecionar imagens para análise">
+        <input id="fileInput" type="file" accept="image/*" multiple />
+        <p class="dropzone-title">Arraste imagens aqui</p>
+        <p class="dropzone-subtitle">ou clique para escolher arquivos</p>
+      </div>
+
+      <div id="selectedFiles" class="selected-files" aria-live="polite"></div>
+
+      <div class="settings-grid">
+        <label class="field">
+          <span>Confiança mínima</span>
+          <input id="confInput" type="number" min="0" max="1" step="0.05" value="0.7" />
+        </label>
+
+        <label class="field">
+          <span>Máximo de tags</span>
+          <input id="maxTagsInput" type="number" min="1" max="50" step="1" value="5" />
+        </label>
+
+        <label class="field">
+          <span>Área mínima (0-1)</span>
+          <input id="minAreaInput" type="number" min="0" max="1" step="0.01" value="0.01" />
+        </label>
+
+        <label class="field">
+          <span>API Key (opcional)</span>
+          <input id="apiKeyInput" type="password" placeholder="X-API-Key" autocomplete="off" />
+        </label>
+      </div>
+
+      <div class="toggles">
+        <label class="toggle">
+          <input id="includePersonInput" type="checkbox" />
+          <span>Incluir pessoa</span>
+        </label>
+        <label class="toggle">
+          <input id="includeDetailsInput" type="checkbox" checked />
+          <span>Incluir detalhes (bbox)</span>
+        </label>
+      </div>
+
+      <button id="analyzeButton" class="btn-primary" type="button">
+        Analisar imagens
+      </button>
+    </section>
+
+    <section class="panel panel-output" aria-labelledby="outputTitle">
+      <h2 id="outputTitle">Resultados</h2>
+
+      <div id="emptyState" class="state-empty">
+        <h3>Sem análise executada</h3>
+        <p>Envie 1 ou mais imagens para visualizar tags e detecções.</p>
+      </div>
+
+      <div id="loadingState" class="state-loading" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <p>Processando imagens...</p>
+      </div>
+
+      <div id="resultContainer" class="result-container"></div>
+    </section>
+  </main>
+
+  <template id="resultTemplate">
+    <article class="result-card">
+      <header>
+        <h3 class="result-title"></h3>
+        <p class="result-tags"></p>
+      </header>
+      <pre class="result-json"></pre>
+    </article>
+  </template>
+
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>
+

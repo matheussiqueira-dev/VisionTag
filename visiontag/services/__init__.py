@@ -1,4 +1,4 @@
-from .admin_service import AdminReadService
-from .detection_service import DetectionService, DetectionServiceProvider
+from .tagging import TaggingService
 
-__all__ = ["AdminReadService", "DetectionService", "DetectionServiceProvider"]
+__all__ = ["TaggingService"]
+
