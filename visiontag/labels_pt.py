@@ -1,4 +1,4 @@
-COCO_PT = {
+COCO_PT: dict[str, str] = {
     "person": "pessoa",
     "bicycle": "bicicleta",
     "car": "carro",
@@ -80,3 +80,8 @@ COCO_PT = {
     "hair drier": "secador",
     "toothbrush": "escova de dente",
 }
+
+
+def translate_label(label_en: str) -> str:
+    """Traduz um rótulo COCO do inglês para português; retorna o original se não mapeado."""
+    return COCO_PT.get(label_en, label_en)
